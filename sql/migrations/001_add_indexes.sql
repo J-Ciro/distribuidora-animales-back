@@ -1,7 +1,7 @@
 -- Migration: Add Indexes for Performance
 -- Purpose: Improve query performance on common filter operations
 
-USE DistribuidoraDB;
+USE distribuidora_db;
 GO
 
 -- Usuarios table indexes

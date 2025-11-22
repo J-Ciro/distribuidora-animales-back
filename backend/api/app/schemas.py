@@ -251,6 +251,8 @@ class PedidoCreate(BaseModel):
     direccion_entrega: str = Field(..., min_length=10)
     telefono_contacto: str = Field(..., pattern=r"^\d{7,15}$")
     nota_especial: Optional[str] = Field(None, max_length=500)
+    usuario_id: int
+    items: List[dict] = []
 
 
 class PedidoEstadoUpdate(BaseModel):
