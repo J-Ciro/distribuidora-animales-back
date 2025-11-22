@@ -14,7 +14,8 @@
 - **Infraestructura**: Docker & Docker Compose  
 - **Base de datos**: SQL Server  
 
----
+
+
 
 ## 🧾 Datos del Producto (Estructura Obligatoria en BD)
 
@@ -176,6 +177,144 @@ Todo producto debe tener los siguientes campos **almacenados en la base de datos
 3. **SQL Server** almacena registro si todo es válido.  
 
 ---
+
+### AC 8: Actualizar producto por id
+
+- **Endpoint**: `PUT /api/admin/productos/{producto_id}` (Producer / API)
+- **Funcionalidad**:
+  - Actualiza los campos del producto identificado por `producto_id` con los valores proporcionados en el cuerpo de la petición.
+  - Campos actualizables: `nombre`, `descripcion`, `precio`, `peso_gramos` (o `peso`), `categoria_id`, `subcategoria_id`, `cantidad_disponible`, `activo`.
+  - Soporta actualización parcial (el cliente puede enviar sólo los campos que desea modificar).
+  - Mantener la validación de negocio: `precio > 0`, `peso_gramos` entero > 0, `nombre` mínimo 2 caracteres, `descripcion` mínimo 10 caracteres cuando se provea.
+
+- **Validaciones adicionales**:
+  - `nombre` debe ser único en el sistema (comparación case-insensitive) excepto respecto al propio producto que se está actualizando.
+  - `categoria_id` y `subcategoria_id` deben existir y ser consistentes (la subcategoría debe pertenecer a la categoría indicada) si se proporcionan.
+  - Si se envía `peso` en kg o en otro formato, documentar y convertir en el Producer/Worker a gramos; internamente se almacena en `peso_gramos` (entero).
+
+- **Flujo esperado**:
+  1. El Producer valida los datos proporcionados y la ausencia de duplicados de `nombre` (excluyendo el registro actual).
+  2. Si todo es válido, actualiza la fila en la base de datos (`UPDATE ...`) y hace `commit`.
+  3. Publica un mensaje en la cola `productos.actualizar` con el payload resultante (id + campos actualizados) para que otros sistemas se sincronicen.
+
+- **Códigos de respuesta**:
+  - `200 OK`: Actualización exitosa. Devuelve la representación actualizada del producto (modelo `ProductoResponse`).
+  - `400 Bad Request`: Validación fallida (por ejemplo, `precio <= 0`, `nombre` demasiado corto, `nombre` duplicado). Responder con JSON explicativo.
+  - `404 Not Found`: Producto no encontrado (id inválido o producto inactivo si la política lo requiere).
+  - `500 Internal Server Error`: Error interno al procesar la actualización.
+
+- **Notas y recomendaciones**:
+  - El Producer debe ser responsable de las validaciones básicas y de evitar publicar mensajes inconsistentes en RabbitMQ.
+  - Considerar aplicar una validación adicional en el Consumer/Worker antes de persistir cambios si la arquitectura requiere una segunda defensa (defense-in-depth).
+  - Registrar en una tabla de auditoría (opcional) los cambios críticos como `nombre`, `precio` o `activo` para trazabilidad.
+
+
+---
+
+### AC 9: Obtener un producto por id
+
+- **Endpoint**: `GET /api/admin/productos/{producto_id}` (Producer / API)
+- **Funcionalidad**:
+  - Devuelve la representación completa de un producto identificado por `producto_id` usando el modelo `ProductoResponse`.
+  - Incluye: `id`, `nombre`, `descripcion`, `precio`, `peso_gramos` (entero), `cantidad_disponible`, `categoria` (id y nombre), `subcategoria` (id y nombre), `imagenes` (array de rutas/URLs), `activo`, `fecha_creacion` y `fecha_actualizacion`.
+  - Por defecto sólo devuelve productos activos (`activo = 1`). Si se requiere incluir inactivos para tareas administrativas, añadir un query param `include_inactive=true` y documentarlo.
+
+- **Validaciones**:
+  - Si `producto_id` no existe o el producto está inactivo, devolver `404 Not Found` con cuerpo JSON: `{ "status": "error", "message": "Producto no encontrado." }`.
+  - Si ocurre un error interno, devolver `500 Internal Server Error` con mensaje JSON explicativo.
+
+- **Códigos de respuesta**:
+  - `200 OK`: Devuelve el `ProductoResponse` completo.
+  - `404 Not Found`: Producto no encontrado.
+  - `500 Internal Server Error`: Error interno al procesar la petición.
+
+- **Notas**:
+  - Recomendada consulta eficiente que una `Productos`, `Categorias`, `Subcategorias` y `ProductoImagenes` (o el uso de la vista `vw_productos_detalle`) para construir la respuesta.
+  - Si posteriormente se requieren metadatos de paginación o relaciones adicionales, documentar el cambio en este HU.
+---
+
+### AC 10: Obtener una imagen por id
+
+- **Endpoint**: `GET /api/admin/productos/{producto_id}/images/{imagen_id}` (Producer / API)
+- **Funcionalidad**:
+  - Devuelve la información de una imagen asociada a un producto específico.
+  - Campos devueltos: `id`, `producto_id`, `ruta_imagen`, `es_principal`, `orden`, `fecha_creacion` (modelo `ProductoImagenResponse`).
+  - Requiere que el `producto_id` exista; por defecto el producto debe estar activo (`activo = 1`).
+
+- **Validaciones**:
+  - Si el `producto_id` no existe o está inactivo, devolver `404 Not Found` con cuerpo JSON: `{ "status": "error", "message": "Producto no encontrado." }`.
+  - Si la `imagen_id` no existe o no pertenece al `producto_id` indicado, devolver `404 Not Found` con cuerpo JSON: `{ "status": "error", "message": "Imagen no encontrada." }`.
+  - Si ocurre un error interno, devolver `500 Internal Server Error` con mensaje JSON explicativo.
+
+- **Códigos de respuesta**:
+  - `200 OK`: Devuelve el `ProductoImagenResponse` con los datos de la imagen.
+  - `404 Not Found`: Producto o imagen no encontrados (incluye imagen no asociada al producto).
+  - `500 Internal Server Error`: Error interno al procesar la petición.
+
+- **Notas**:
+  - La ruta `ruta_imagen` debe ser una URL o ruta relativa usable por la UI para mostrar la imagen (por ejemplo, prefijada con el path del servidor o el CDN si aplica).
+  - Si se requiere borrar también el archivo físico en disco, implementar `DELETE /api/admin/productos/{producto_id}/images/{imagen_id}` (ya existe la operación DELETE pendiente) que realice eliminación física y lógica en la DB según política.
+
+### AC 11: Actualizar una imagen por id
+
+- **Endpoint**: `PUT /api/admin/productos/{producto_id}/images/{imagen_id}` (Producer / API)
+- **Funcionalidad**:
+  - Permite actualizar la imagen asociada a un producto: reemplazar el archivo de imagen y/o actualizar metadatos (`es_principal`, `orden`).
+  - Si se reemplaza el archivo, el servidor deberá validar formato y tamaño, almacenar la nueva imagen (por ejemplo en `uploads/productos/{producto_id}/`) y actualizar la columna `ruta_imagen` en `ProductoImagenes`.
+  - Recomendar eliminar el archivo físico anterior al confirmar la actualización para evitar archivos huérfanos.
+
+- **Validaciones**:
+  - El `producto_id` debe existir y estar activo (`activo = 1`). Si no, devolver `404` con `{ "status": "error", "message": "Producto no encontrado." }`.
+  - La `imagen_id` debe existir y pertenecer al `producto_id` indicado. Si no, devolver `404` con `{ "status": "error", "message": "Imagen no encontrada." }`.
+  - Si se envía un archivo, validar extensión entre `.jpg`, `.jpeg`, `.png`, `.svg`, `.webp` y tamaño <= 10 MB; si no cumple, devolver `400` con el mensaje exacto: `"Formato o tamaño de imagen no válido."`.
+  - Validar que `orden` sea entero >= 0 y `es_principal` sea booleano si se proporcionan.
+
+- **Flujo esperado**:
+  1. El Producer valida existencia del producto y de la imagen (y parámetros básicos).
+  2. Si se envía archivo nuevo: validar formato/size, guardar archivo en disco (naming seguro), actualizar `ruta_imagen` en la BD y eliminar el archivo antiguo.
+  3. Actualizar campos `es_principal` y/o `orden` si fueron enviados.
+  4. Hacer `commit` en la base de datos y devolver `200 OK` con el objeto `ProductoImagenResponse` actualizado.
+  5. Publicar un mensaje en la cola `productos.imagen.actualizar` con `{ "producto_id": <id>, "imagen_id": <id>, "ruta_imagen": "...", "es_principal": ..., "orden": ... }`.
+
+- **Códigos de respuesta**:
+  - `200 OK`: Actualización exitosa. Devuelve el `ProductoImagenResponse` actualizado.
+  - `400 Bad Request`: Validación fallida (por ejemplo, formato/size de imagen inválido) con JSON explicativo.
+  - `404 Not Found`: Producto o imagen no encontrados.
+  - `500 Internal Server Error`: Error interno al procesar la actualización.
+
+- **Notas**:
+  - La operación debe ser atómica: si la actualización de la BD falla después de guardar el nuevo archivo, el servidor debe eliminar el archivo nuevo y restaurar el estado anterior o devolver un error claro para evitar inconsistencias.
+  - Si la política requiere, el Worker puede encargarse de la eliminación física en segundo plano (por ejemplo, publicar `productos.imagen.actualizar` y dejar que el worker haga housekeeping).
+
+
+
+
+### AC 12: Eliminar una imagen por id
+
+- **Endpoint**: `DELETE /api/admin/productos/{producto_id}/images/{imagen_id}` (Producer / API)
+- **Funcionalidad**:
+  - Elimina una imagen asociada a un producto específico, removiendo la fila en `ProductoImagenes` y eliminando el archivo físico localizado en `ruta_imagen` cuando aplique.
+  - Publica un mensaje en la cola `productos.imagen.eliminar` con el payload `{ "producto_id": <id>, "imagen_id": <id>, "ruta_imagen": "<ruta_o_null>" }`.
+
+- **Validaciones**:
+  - El `producto_id` debe existir y estar activo (`activo = 1`). Si no, devolver `404 Not Found` con `{ "status": "error", "message": "Producto no encontrado." }`.
+  - La `imagen_id` debe existir y pertenecer al `producto_id` indicado. Si no, devolver `404 Not Found` con `{ "status": "error", "message": "Imagen no encontrada." }`.
+
+- **Flujo recomendado**:
+  1. Verificar existencia del producto y de la imagen (y que la imagen pertenezca al producto indicado).
+  2. Ejecutar la eliminación de la fila en la BD (`DELETE FROM ProductoImagenes WHERE id = :imagen_id AND producto_id = :producto_id`) dentro de una transacción.
+  3. Si la eliminación en BD fue exitosa, intentar eliminar el archivo físico referenciado en `ruta_imagen` si existe. Si la eliminación del archivo falla, registrar el error y continuar (no debe dejar la BD inconsistente).
+  4. Publicar el evento `productos.imagen.eliminar` con la información de la imagen eliminada.
+
+- **Códigos de respuesta**:
+  - `200 OK`: Eliminación exitosa. Ejemplo: `{ "status": "success", "message": "Imagen eliminada correctamente" }`.
+  - `404 Not Found`: Producto o imagen no encontrados.
+  - `500 Internal Server Error`: Error interno al procesar la eliminación.
+
+- **Notas**:
+  - Si el archivo físico no existe pero la fila en BD sí, eliminar igualmente la fila y devolver éxito; registrar el incidente para limpieza manual/automática.
+  - Registrar un log/auditoría del evento de eliminación (usuario que solicita, timestamp) para trazabilidad.
+  - En arquitecturas donde la eliminación física la realice el Worker, se puede optar por sólo publicar `productos.imagen.eliminar` y dejar que el Worker haga la eliminación física; documentar la opción escogida.
 
 ## 🧪 Ejemplo de Payload Válido
 
