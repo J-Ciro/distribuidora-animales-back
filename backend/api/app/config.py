@@ -18,7 +18,7 @@ class Settings(BaseSettings):
     # Database (SQL Server)
     DB_SERVER: str = "localhost"
     DB_PORT: int = 1433
-    DB_NAME: str = "DistribuidoraDB"
+    DB_NAME: str = "distribuidora_db"
     DB_USER: str = "sa"
     DB_PASSWORD: str = "YourPassword123!"
     
