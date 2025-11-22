@@ -26,6 +26,8 @@ services:
       - RABBITMQ_PASSWORD=guest
     networks:
       - distribuidora-network
+    volumes:
+      - ./backend/api/app/uploads:/app/uploads   # persistir uploads entre reinicios y hacerlo accesible desde contenedor
 
   worker:
     build:

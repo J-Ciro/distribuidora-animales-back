@@ -24,6 +24,7 @@ class Usuario(Base):
     direccion_envio = Column(String(500), nullable=True)
     preferencia_mascotas = Column(String(20), nullable=True)  # Perros, Gatos, Ambos, Ninguno
     is_active = Column(Boolean, default=False, nullable=False)  # False hasta verificar email
+    es_admin = Column(Boolean, default=False, nullable=False)  # True para admin, False para cliente
     
     # Campos para bloqueo de cuenta
     failed_login_attempts = Column(Integer, default=0, nullable=False)
