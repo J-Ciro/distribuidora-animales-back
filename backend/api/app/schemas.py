@@ -9,23 +9,44 @@ from datetime import datetime
 # Auth Schemas
 class LoginRequest(BaseModel):
     email: EmailStr
-    password: str = Field(..., min_length=10)
+    password: str
+    session_id: Optional[str] = None
+
+
+class CartMergeInfo(BaseModel):
+    merged: bool
+    items_adjusted: List = []
+
+
+class LoginSuccessResponse(BaseModel):
+    status: str
+    message: str
+    access_token: str
+    cart_merge: Optional[CartMergeInfo] = None
+
 
 
 class RegisterRequest(BaseModel):
-    nombre_completo: str = Field(..., min_length=3, max_length=100)
+    """Request schema for user registration - matches HU specifications exactly"""
     email: EmailStr
     password: str = Field(..., min_length=10)
-    cedula: str = Field(..., pattern=r"^\d{6,12}$")
+    nombre: str = Field(..., min_length=1, max_length=100)  # Maps to nombre_completo in DB
+    cedula: Optional[str] = Field(None, pattern=r"^\d{6,12}$")
+    telefono: Optional[str] = Field(None, max_length=20)
+    direccion_envio: Optional[str] = Field(None, max_length=500)
+    preferencia_mascotas: Optional[str] = Field(None, pattern="^(Perros|Gatos|Ambos|Ninguno)$")
     
     @field_validator('password')
     def password_strength(cls, v):
+        """Validate password according to HU specifications - exact error message"""
+        if len(v) < 10:
+            raise ValueError('La contraseña debe tener al menos 10 caracteres, incluir una mayúscula, un número y un carácter especial.')
         if not any(c.isupper() for c in v):
-            raise ValueError('Password must contain uppercase letter')
+            raise ValueError('La contraseña debe tener al menos 10 caracteres, incluir una mayúscula, un número y un carácter especial.')
         if not any(c.isdigit() for c in v):
-            raise ValueError('Password must contain digit')
+            raise ValueError('La contraseña debe tener al menos 10 caracteres, incluir una mayúscula, un número y un carácter especial.')
         if not any(c in '!@#$%^&*()_+-=[]{}|;:,.<>?' for c in v):
-            raise ValueError('Password must contain special character')
+            raise ValueError('La contraseña debe tener al menos 10 caracteres, incluir una mayúscula, un número y un carácter especial.')
         return v
 
 
@@ -36,8 +57,20 @@ class TokenResponse(BaseModel):
 
 
 class VerificationCodeRequest(BaseModel):
+    """Request schema for email verification"""
     email: EmailStr
     code: str = Field(..., pattern=r"^\d{6}$")
+
+
+class ResendCodeRequest(BaseModel):
+    """Request schema for resending verification code"""
+    email: EmailStr
+
+
+class StandardResponse(BaseModel):
+    """Standard response schema matching HU specifications exactly"""
+    status: str  # "success" or "error"
+    message: str
 
 
 # Category Schemas (HU_MANAGE_CATEGORIES)
@@ -121,7 +154,7 @@ class ProductoCreate(BaseModel):
     categoria_id: int
     subcategoria_id: int
     cantidad_disponible: int = Field(default=0, ge=0)
-    sku: Optional[str] = Field(None, max_length=50)
+    # sku removed from create payload per requirements
 
 
 class ProductoUpdate(BaseModel):
@@ -142,12 +175,26 @@ class ProductoResponse(BaseModel):
     precio: float
     peso_gramos: int
     cantidad_disponible: int
-    sku: Optional[str]
+    # sku removed from response
     categoria_id: int
     subcategoria_id: int
     activo: bool
+    categoria: Optional[CategoriaResponse] = None
+    subcategoria: Optional[SubcategoriaResponse] = None
+    imagenes: List[str] = []
     fecha_creacion: datetime
     
+    class Config:
+        from_attributes = True
+
+
+class ProductoImagenResponse(BaseModel):
+    id: int
+    producto_id: int
+    ruta_imagen: str
+    es_principal: bool
+    orden: int
+
     class Config:
         from_attributes = True
 
@@ -247,13 +294,15 @@ class CarruselImagenUpdate(BaseModel):
 class CarruselImagenResponse(BaseModel):
     id: int
     orden: int
-    ruta_imagen: str
+    ruta_imagen: str = Field(..., alias="imagen_url")
     link_url: Optional[str]
     activo: bool
-    fecha_creacion: datetime
-    
+    fecha_creacion: datetime = Field(..., alias="created_at")
+
     class Config:
+        # Allow reading from ORM attributes and populate by field name when needed
         from_attributes = True
+        allow_population_by_field_name = True
 
 
 # User Schemas

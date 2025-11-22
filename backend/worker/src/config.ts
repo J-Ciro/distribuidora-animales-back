@@ -1,6 +1,7 @@
 import dotenv from 'dotenv';
+import path from 'path';
 
-dotenv.config();
+dotenv.config({ path: path.resolve(__dirname, '../../.env') });
 
 // Build RabbitMQ URL from environment variables if explicit RABBITMQ_URL is not provided
 const rabbitUser = process.env.RABBITMQ_USER || process.env.RABBITMQ_USERNAME || 'guest';
@@ -11,10 +12,12 @@ const rabbitPort = process.env.RABBITMQ_PORT || '5672';
 const defaultRabbitUrl = `amqp://${rabbitUser}:${rabbitPass}@${rabbitHost}:${rabbitPort}/`;
 
 export const config = {
+  nodeEnv: process.env.NODE_ENV || 'development',  // Añadido nodeEnv
   rabbitMQ: {
     url: process.env.RABBITMQ_URL || defaultRabbitUrl,
     queues: {
-      sendEmail: 'send_email_queue',
+      emailNotifications: 'email.notifications',
+      sendEmail: 'send_email_queue',  // Mantenido para compatibilidad
       processOrder: 'process_order_queue',
       updateInventory: 'update_inventory_queue',
       userRegistration: 'user_registration_queue',
@@ -25,12 +28,14 @@ export const config = {
       crearSubcategoria: 'subcategorias.crear',
       actualizarSubcategoria: 'subcategorias.actualizar',
       eliminarSubcategoria: 'subcategorias.eliminar',
+      productosCrear: process.env.RABBITMQ_QUEUE_PRODUCTOS_CREAR || 'productos.crear',
     },
   },
   smtp: {
-    host: process.env.SMTP_HOST,
+    host: process.env.SMTP_HOST || 'smtp.gmail.com',
     port: parseInt(process.env.SMTP_PORT || '587', 10),
-    user: process.env.SMTP_USER,
-    pass: process.env.SMTP_PASS,
+    user: process.env.SMTP_USER || '',
+    pass: process.env.SMTP_PASS || '',
+    from: process.env.SMTP_FROM || 'no-reply@distribuidora.com'  // Añadido from
   },
 };
