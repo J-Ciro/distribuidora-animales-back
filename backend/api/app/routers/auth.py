@@ -5,6 +5,7 @@ Handles HU_REGISTER_USER and HU_LOGIN_USER
 from fastapi import APIRouter, Depends, HTTPException, status, Response, Request
 from sqlalchemy.orm import Session
 from sqlalchemy import func, and_, or_
+from sqlalchemy.exc import IntegrityError
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 import uuid
@@ -43,6 +44,16 @@ def _check_email_exists(db: Session, email: str, exclude_user_id: Optional[int] 
     return query.first() is not None
 
 
+def _check_cedula_exists(db: Session, cedula: str, exclude_user_id: Optional[int] = None) -> bool:
+    """Check if cedula exists in usuarios table"""
+    if not cedula:
+        return False
+    query = db.query(Usuario).filter(Usuario.cedula == cedula)
+    if exclude_user_id:
+        query = query.filter(Usuario.id != exclude_user_id)
+    return query.first() is not None
+
+
 @router.post("/register", response_model=StandardResponse, status_code=status.HTTP_201_CREATED)
 async def register(request: RegisterRequest, db: Session = Depends(get_db)):
     """
@@ -68,6 +79,13 @@ async def register(request: RegisterRequest, db: Session = Depends(get_db)):
                 status_code=status.HTTP_409_CONFLICT,
                 detail={"status": "error", "message": "El correo ya está registrado. ¿Deseas iniciar sesión o recuperar tu contraseña?"}
             )
+
+        # 2b. Check cedula uniqueness (if provided)
+        if request.cedula and _check_cedula_exists(db, request.cedula):
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail={"status": "error", "message": "La cédula ya está registrada."}
+            )
         
         # 3. Password validation is handled by Pydantic field_validator
         # It will raise ValueError with the exact message if invalid
@@ -87,7 +105,20 @@ async def register(request: RegisterRequest, db: Session = Depends(get_db)):
             is_active=False
         )
         db.add(nuevo_usuario)
-        db.flush()  # Get the ID without committing
+        try:
+            db.flush()  # Get the ID without committing
+        except IntegrityError as ie:
+            db.rollback()
+            # Handle unique constraint violations that slipped past pre-checks
+            msg = str(ie.orig) if hasattr(ie, 'orig') else str(ie)
+            # If cedula duplicate key reported, return cedula message
+            if 'duplicate' in msg.lower() or 'violation' in msg.lower() or 'unique' in msg.lower():
+                # Generic message to avoid leaking DB constraint names
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail={"status": "error", "message": "El correo o la cédula ya están registrados."}
+                )
+            raise
         
         # 6. Generate verification code (6 digits)
         verification_code = security_utils.generate_verification_code()
@@ -126,30 +157,29 @@ async def register(request: RegisterRequest, db: Session = Depends(get_db)):
         
         db.flush()
         
-        # 8. Publish message to RabbitMQ email.verification queue
+        # 8. Publish message to RabbitMQ queue expected by the worker: email.notifications
         request_id = str(uuid.uuid4())
+        subject = "Verifica tu correo electrónico - Distribuidora Perros y Gatos"
         message = {
             "requestId": request_id,
-            "action": "send_verification_email",
-            "payload": {
-                "usuarioId": nuevo_usuario.id,
-                "email": request.email,
-                "code": verification_code,  # Include code in message for worker
-                "nombre": request.nombre
+            "to": request.email,
+            "subject": subject,
+            "template": "verification",
+            "context": {
+                "name": request.nombre,
+                "code": verification_code,
+                "year": datetime.now().year,
+                "subject": subject
             },
-            "meta": {
-                "timestamp": datetime.now(timezone.utc).isoformat(),
-                "retry": 0
-            }
+            "timestamp": datetime.now(timezone.utc).isoformat()
         }
-        
+
         try:
-            rabbitmq_producer.publish("email.verification", message, durable=True)
+            rabbitmq_producer.publish("email.notifications", message, durable=True)
             logger.info(f"Published verification email message for user {nuevo_usuario.id}, requestId: {request_id}")
         except Exception as e:
-            logger.error(f"Failed to publish to RabbitMQ: {str(e)}")
-            # Don't fail the registration if RabbitMQ is down
-            # Registration is still successful even if email queue fails
+            logger.error(f"Failed to publish to RabbitMQ (email.notifications): {str(e)}")
+            # Don't fail the registration if RabbitMQ is down; registration still succeeds
         
         # 9. Commit transaction
         db.commit()
