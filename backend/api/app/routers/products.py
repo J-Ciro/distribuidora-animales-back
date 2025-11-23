@@ -16,6 +16,7 @@ from app.config import settings
 from app.utils.rabbitmq import rabbitmq_producer
 from sqlalchemy import text
 import time
+import uuid
 
 logger = logging.getLogger(__name__)
 
@@ -232,15 +233,14 @@ async def list_products(
     subcats = {}
     try:
         if cat_ids:
-            qcat = text("SELECT id, nombre FROM Categorias WHERE id IN (:ids)").bindparams(ids=tuple(cat_ids))
-            # SQLAlchemy text with IN tuple isn't straightforward; build dynamic list
-            qcat = text(f"SELECT id, nombre FROM Categorias WHERE id IN ({', '.join([str(int(x)) for x in cat_ids])})")
+            # include fecha_creacion and fecha_actualizacion to satisfy response schema
+            qcat = text(f"SELECT id, nombre, fecha_creacion, fecha_actualizacion FROM Categorias WHERE id IN ({', '.join([str(int(x)) for x in cat_ids])})")
             for c in db.execute(qcat).fetchall():
-                cats[c.id] = {"id": c.id, "nombre": c.nombre}
+                cats[c.id] = {"id": c.id, "nombre": c.nombre, "created_at": c.fecha_creacion, "updated_at": c.fecha_actualizacion}
         if subcat_ids:
-            qsub = text(f"SELECT id, nombre FROM Subcategorias WHERE id IN ({', '.join([str(int(x)) for x in subcat_ids])})")
+            qsub = text(f"SELECT id, nombre, categoria_id, fecha_creacion, fecha_actualizacion FROM Subcategorias WHERE id IN ({', '.join([str(int(x)) for x in subcat_ids])})")
             for s in db.execute(qsub).fetchall():
-                subcats[s.id] = {"id": s.id, "nombre": s.nombre}
+                subcats[s.id] = {"id": s.id, "nombre": s.nombre, "categoria_id": s.categoria_id, "created_at": s.fecha_creacion, "updated_at": s.fecha_actualizacion}
     except Exception:
         # Non-fatal: proceed without names
         logger.exception("Error fetching category/subcategory names")
@@ -317,11 +317,11 @@ async def get_product(producto_id: int, include_inactive: bool = Query(False), d
         cat_row = None
         sub_row = None
         if producto['categoria_id']:
-            cat_row = db.execute(text("SELECT id, nombre FROM Categorias WHERE id = :id"), {"id": producto['categoria_id']}).first()
+            cat_row = db.execute(text("SELECT id, nombre, fecha_creacion, fecha_actualizacion FROM Categorias WHERE id = :id"), {"id": producto['categoria_id']}).first()
         if producto['subcategoria_id']:
-            sub_row = db.execute(text("SELECT id, nombre FROM Subcategorias WHERE id = :id"), {"id": producto['subcategoria_id']}).first()
-        producto['categoria'] = {"id": cat_row.id, "nombre": cat_row.nombre} if cat_row else None
-        producto['subcategoria'] = {"id": sub_row.id, "nombre": sub_row.nombre} if sub_row else None
+            sub_row = db.execute(text("SELECT id, nombre, categoria_id, fecha_creacion, fecha_actualizacion FROM Subcategorias WHERE id = :id"), {"id": producto['subcategoria_id']}).first()
+        producto['categoria'] = {"id": cat_row.id, "nombre": cat_row.nombre, "created_at": cat_row.fecha_creacion, "updated_at": cat_row.fecha_actualizacion} if cat_row else None
+        producto['subcategoria'] = {"id": sub_row.id, "nombre": sub_row.nombre, "categoria_id": sub_row.categoria_id, "created_at": sub_row.fecha_creacion, "updated_at": sub_row.fecha_actualizacion} if sub_row else None
     except Exception:
         logger.exception("Error fetching category/subcategory for product %s", producto_id)
         producto['categoria'] = None
@@ -341,7 +341,7 @@ async def get_product(producto_id: int, include_inactive: bool = Query(False), d
     return producto
 
 
-@router.put("/{producto_id}", response_model=ProductoResponse)
+@router.put("/{producto_id}", response_model=ProductoResponse, tags=["Inventory","Products"])
 async def update_product(
     producto_id: int,
     request: ProductoUpdate,
@@ -488,11 +488,11 @@ async def update_product(
         cat_row = None
         sub_row = None
         if producto['categoria_id']:
-            cat_row = db.execute(text("SELECT id, nombre FROM Categorias WHERE id = :id"), {"id": producto['categoria_id']}).first()
+            cat_row = db.execute(text("SELECT id, nombre, fecha_creacion, fecha_actualizacion FROM Categorias WHERE id = :id"), {"id": producto['categoria_id']}).first()
         if producto['subcategoria_id']:
-            sub_row = db.execute(text("SELECT id, nombre FROM Subcategorias WHERE id = :id"), {"id": producto['subcategoria_id']}).first()
-        producto['categoria'] = {"id": cat_row.id, "nombre": cat_row.nombre} if cat_row else None
-        producto['subcategoria'] = {"id": sub_row.id, "nombre": sub_row.nombre} if sub_row else None
+            sub_row = db.execute(text("SELECT id, nombre, categoria_id, fecha_creacion, fecha_actualizacion FROM Subcategorias WHERE id = :id"), {"id": producto['subcategoria_id']}).first()
+        producto['categoria'] = {"id": cat_row.id, "nombre": cat_row.nombre, "created_at": cat_row.fecha_creacion, "updated_at": cat_row.fecha_actualizacion} if cat_row else None
+        producto['subcategoria'] = {"id": sub_row.id, "nombre": sub_row.nombre, "categoria_id": sub_row.categoria_id, "created_at": sub_row.fecha_creacion, "updated_at": sub_row.fecha_actualizacion} if sub_row else None
     except Exception:
         logger.exception("Error fetching category/subcategory names after update")
         producto['categoria'] = None
@@ -523,6 +523,61 @@ async def update_product(
             pass
 
     return producto
+ 
+
+@router.put("/{producto_id}/stock", tags=["Inventory","Products"])
+async def update_product_stock(producto_id: int, request_obj: Request, db: Session = Depends(get_db)):
+    """
+    Producer endpoint: manually update product stock (only publishes message to RabbitMQ)
+
+    Validations and exact messages required by the HU:
+    - Missing required fields -> "Por favor, completa todos los campos obligatorios."
+    - cantidad must be positive -> "La cantidad debe ser un número positivo."
+    - If product missing -> "Producto no encontrado."
+    - On success -> "Existencias actualizadas exitosamente"
+    """
+    # Parse body manually to provide exact validation messages
+    try:
+        payload = await request_obj.json()
+    except Exception:
+        return JSONResponse(status_code=status.HTTP_400_BAD_REQUEST, content={"status": "error", "message": "Por favor, completa todos los campos obligatorios."})
+
+    cantidad = payload.get('cantidad') if isinstance(payload, dict) else None
+    if cantidad is None:
+        return JSONResponse(status_code=status.HTTP_400_BAD_REQUEST, content={"status": "error", "message": "Por favor, completa todos los campos obligatorios."})
+
+    try:
+        cantidad_val = int(cantidad)
+        if cantidad_val <= 0:
+            raise ValueError()
+    except Exception:
+        return JSONResponse(status_code=status.HTTP_400_BAD_REQUEST, content={"status": "error", "message": "La cantidad debe ser un número positivo."})
+
+    # Verify product exists
+    try:
+        prod = db.execute(text("SELECT id FROM Productos WHERE id = :id"), {"id": producto_id}).first()
+    except Exception as e:
+        logger.exception("Error checking product existence for stock update: %s", e)
+        return JSONResponse(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, content={"status": "error", "message": "Error interno al verificar producto."})
+
+    if not prod or not getattr(prod, 'id', None):
+        return JSONResponse(status_code=status.HTTP_404_NOT_FOUND, content={"status": "error", "message": "Producto no encontrado."})
+
+    # Publish message to RabbitMQ in exact format required
+    try:
+        msg = {"requestId": str(uuid.uuid4()), "productoId": int(producto_id), "cantidad": int(cantidad_val)}
+        rabbitmq_producer.connect()
+        rabbitmq_producer.publish(queue_name="inventario.reabastecer", message=msg)
+    except Exception as e:
+        logger.exception("Error publishing inventario.reabastecer message: %s", e)
+        return JSONResponse(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, content={"status": "error", "message": "Error interno al procesar la solicitud."})
+    finally:
+        try:
+            rabbitmq_producer.close()
+        except Exception:
+            pass
+
+    return JSONResponse(status_code=status.HTTP_200_OK, content={"status": "success", "message": "Existencias actualizadas exitosamente"})
 
 
 @router.post("/{producto_id}/images")
@@ -935,7 +990,7 @@ async def delete_product_image(
     return JSONResponse(status_code=status.HTTP_200_OK, content={"status": "success", "message": "Imagen eliminada correctamente"})
 
 
-@router.delete("/{producto_id}")
+@router.delete("/{producto_id}", tags=["Inventory","Products"])
 async def delete_product(producto_id: int, db: Session = Depends(get_db)):
     """
     Soft delete product (mark as inactive)
@@ -944,9 +999,9 @@ async def delete_product(producto_id: int, db: Session = Depends(get_db)):
     - Set activo=False instead of deleting
     - Publishes productos.eliminar queue message
     """
-    # 1. Verify product exists and is active
+    # 1. Verify product exists
     try:
-        prod = db.execute(text("SELECT id, activo FROM Productos WHERE id = :id"), {"id": producto_id}).first()
+        prod = db.execute(text("SELECT id FROM Productos WHERE id = :id"), {"id": producto_id}).first()
     except Exception as e:
         logger.exception("Error checking product for delete: %s", e)
         return JSONResponse(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, content={"status": "error", "message": "Error interno al verificar producto."})
@@ -954,34 +1009,19 @@ async def delete_product(producto_id: int, db: Session = Depends(get_db)):
     if not prod or not getattr(prod, 'id', None):
         return JSONResponse(status_code=status.HTTP_404_NOT_FOUND, content={"status": "error", "message": "Producto no encontrado."})
 
-    if getattr(prod, 'activo', 0) == 0:
-        return JSONResponse(status_code=status.HTTP_404_NOT_FOUND, content={"status": "error", "message": "Producto no encontrado."})
-
-    # 2. Perform soft-delete (activo = 0) using OUTPUT to verify the change
+    # 2. Check inventory history: if exists, do not allow deletion
     try:
-        upd = text("""
-        UPDATE Productos
-        SET activo = 0
-        OUTPUT inserted.id AS id, inserted.activo AS activo
-        WHERE id = :id
-        """)
-        res = db.execute(upd, {"id": producto_id})
-        row = res.fetchone()
-        db.commit()
-        if not row:
-            # Nothing updated, return 404
-            return JSONResponse(status_code=status.HTTP_404_NOT_FOUND, content={"status": "error", "message": "Producto no encontrado."})
-        # row.activo should be 0 now
-        updated_activo = int(row.activo)
-        if updated_activo != 0:
-            logger.warning("Product updated but activo != 0: %s", row)
+        hist = db.execute(text("SELECT TOP 1 1 AS exists_flag FROM InventarioHistorial WHERE producto_id = :id"), {"id": producto_id}).first()
     except Exception as e:
-        logger.exception("Error marking product as inactive: %s", e)
-        return JSONResponse(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, content={"status": "error", "message": "Error interno al eliminar el producto."})
+        logger.exception("Error checking InventarioHistorial for product delete: %s", e)
+        return JSONResponse(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, content={"status": "error", "message": "Error interno al verificar historial de inventario."})
 
-    # 3. Publish productos.eliminar message to RabbitMQ
+    if hist:
+        return JSONResponse(status_code=status.HTTP_400_BAD_REQUEST, content={"status": "error", "message": "No se puede eliminar el producto porque tiene movimientos registrados."})
+
+    # 3. Publish productos.eliminar message to RabbitMQ (Producer does not delete DB)
     try:
-        message = {"producto_id": int(producto_id)}
+        message = {"requestId": str(uuid.uuid4()), "productoId": int(producto_id)}
         rabbitmq_producer.connect()
         rabbitmq_producer.publish(queue_name="productos.eliminar", message=message)
     except Exception as e:
@@ -993,4 +1033,18 @@ async def delete_product(producto_id: int, db: Session = Depends(get_db)):
         except Exception:
             pass
 
-    return JSONResponse(status_code=status.HTTP_200_OK, content={"status": "success", "message": "Producto eliminado correctamente"})
+    # 4. Also mark product as inactive in DB (soft delete)
+    try:
+        upd = text("UPDATE Productos SET activo = 0, fecha_actualizacion = GETUTCDATE() WHERE id = :id")
+        res = db.execute(upd, {"id": producto_id})
+        try:
+            affected = res.rowcount
+        except Exception:
+            affected = None
+        db.commit()
+    except Exception as e:
+        logger.exception("Error marking product inactive: %s", e)
+        db.rollback()
+        # still return success to client but log
+
+    return JSONResponse(status_code=status.HTTP_200_OK, content={"status": "success", "message": "Producto eliminado exitosamente"})
