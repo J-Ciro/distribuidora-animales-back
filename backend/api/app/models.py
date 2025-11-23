@@ -1,7 +1,7 @@
 """
 SQLAlchemy models for database tables
 """
-from sqlalchemy import Column, Integer, String, Boolean, DateTime, ForeignKey, Index
+from sqlalchemy import Column, Integer, String, Boolean, DateTime, ForeignKey, Index, Numeric
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from app.database import Base
@@ -16,10 +16,18 @@ class Usuario(Base):
     __tablename__ = "usuarios"
     
     id = Column(Integer, primary_key=True, index=True, autoincrement=True)
+    nombre_completo = Column(String(200), nullable=False)
     email = Column(String(255), unique=True, nullable=False, index=True)
+    cedula = Column(String(50), nullable=False)
     password_hash = Column(String(255), nullable=False)
-    nombre_completo = Column(String(100), nullable=False)
-    cedula = Column(String(20), nullable=True, index=True)
+    es_admin = Column(Boolean, default=False, nullable=False)
+    is_active = Column(Boolean, default=False, nullable=False)
+    fecha_registro = Column(DateTime, server_default=func.getdate(), nullable=True)
+    ultimo_login = Column(DateTime, nullable=True)
+    created_at = Column(DateTime, nullable=True)
+    updated_at = Column(DateTime, nullable=True)
+
+    # Additional fields added to match database schema
     telefono = Column(String(20), nullable=True)
     direccion_envio = Column(String(500), nullable=True)
     preferencia_mascotas = Column(String(20), nullable=True)  # Perros, Gatos, Ambos, Ninguno
@@ -29,12 +37,8 @@ class Usuario(Base):
     # Campos para bloqueo de cuenta
     failed_login_attempts = Column(Integer, default=0, nullable=False)
     locked_until = Column(DateTime, nullable=True)
-    
-    created_at = Column(DateTime, server_default=func.getdate(), nullable=False)
-    updated_at = Column(DateTime, server_default=func.getdate(), onupdate=func.getdate(), nullable=False)
-    ultimo_login = Column(DateTime, nullable=True)
-    
-    # Relationships
+
+    # Relationships (other tables may still reference usuarios.id)
     verification_codes = relationship("VerificationCode", back_populates="usuario", cascade="all, delete-orphan")
     refresh_tokens = relationship("RefreshToken", back_populates="usuario", cascade="all, delete-orphan")
     
@@ -103,3 +107,39 @@ class CarruselImagen(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now(), server_default=func.now())
     activo = Column(Boolean, nullable=False, default=True)
+
+
+# Orders models
+class Pedido(Base):
+    __tablename__ = 'Pedidos'
+
+    id = Column(Integer, primary_key=True, index=True, autoincrement=True)
+    usuario_id = Column(Integer, nullable=False, index=True)
+    estado = Column(String(50), nullable=False, default='Pendiente')
+    total = Column(Numeric(10, 2), nullable=False, default=0)
+    direccion_entrega = Column(String(500), nullable=False)
+    telefono_contacto = Column(String(20), nullable=False)
+    nota_especial = Column(String(500), nullable=True)
+    fecha_creacion = Column(DateTime(timezone=True), server_default=func.now())
+
+
+class PedidoItem(Base):
+    __tablename__ = 'PedidoItems'
+
+    id = Column(Integer, primary_key=True, index=True, autoincrement=True)
+    pedido_id = Column(Integer, ForeignKey('Pedidos.id', ondelete='CASCADE'), nullable=False, index=True)
+    producto_id = Column(Integer, nullable=False)
+    cantidad = Column(Integer, nullable=False)
+    precio_unitario = Column(Numeric(10, 2), nullable=False)
+
+
+class PedidosHistorialEstado(Base):
+    __tablename__ = 'PedidosHistorialEstado'
+
+    id = Column(Integer, primary_key=True, index=True, autoincrement=True)
+    pedido_id = Column(Integer, ForeignKey('Pedidos.id', ondelete='CASCADE'), nullable=False, index=True)
+    estado_anterior = Column(String(50), nullable=True)
+    estado_nuevo = Column(String(50), nullable=False)
+    usuario_id = Column(Integer, nullable=True)
+    nota = Column(String(300), nullable=True)
+    fecha = Column(DateTime(timezone=True), server_default=func.now())
