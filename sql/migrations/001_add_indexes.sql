@@ -1,6 +1,17 @@
 -- Migration: Add Indexes for Performance
 -- Purpose: Improve query performance on common filter operations
 
+-- FIX 1: Añadir opciones SET requeridas para la creación de índices (Resuelve Msg 1934)
+SET ANSI_NULLS ON;
+SET ANSI_PADDING ON;
+SET ANSI_WARNINGS ON;
+SET ARITHABORT ON;
+SET CONCAT_NULL_YIELDS_NULL ON;
+SET QUOTED_IDENTIFIER ON;
+GO
+
+-- FIX 2: Corregir el casing del nombre de la base de datos a minúsculas para coincidir
+-- con la conexión del shell script (Resuelve Msg 911)
 USE distribuidora_db;
 GO
 

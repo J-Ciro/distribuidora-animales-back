@@ -33,10 +33,12 @@ BEGIN
     ADD CONSTRAINT FK_CartItems_Productos FOREIGN KEY (producto_id) REFERENCES dbo.Productos(id) ON DELETE NO ACTION;
 END
 
+-- APLICANDO LA CORRECCIÓN: Cambiar ON DELETE CASCADE a ON DELETE NO ACTION en FK_CartItems_Carts
+-- para evitar el error de "multiple cascade paths" (Msg 1785).
 IF OBJECT_ID('dbo.CartItems', 'U') IS NOT NULL AND OBJECT_ID('dbo.Carts', 'U') IS NOT NULL
 BEGIN
     ALTER TABLE dbo.CartItems
-    ADD CONSTRAINT FK_CartItems_Carts FOREIGN KEY (cart_id) REFERENCES dbo.Carts(id) ON DELETE CASCADE;
+    ADD CONSTRAINT FK_CartItems_Carts FOREIGN KEY (cart_id) REFERENCES dbo.Carts(id) ON DELETE NO ACTION; -- CAMBIO AQUÍ
 END
 
 -- Notes: run this script against the database using sqlcmd or SSMS

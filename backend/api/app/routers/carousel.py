@@ -23,6 +23,8 @@ router = APIRouter(
     tags=["carousel"]
 )
 
+UPLOAD_DIR = "backend/api/app/uploads/carrusel"
+
 
 @router.get("", response_model=List[CarruselImagenResponse])
 async def list_carousel_images(db: Session = Depends(get_db)):
@@ -78,7 +80,7 @@ async def add_carousel_image(
     if active_count >= 5:
         return JSONResponse(status_code=status.HTTP_400_BAD_REQUEST, content={"status": "error", "message": "El carrusel ya tiene el número máximo de imágenes."})
 
-    # Prepare upload directory
+    # Prepare upload directory (use configured UPLOAD_DIR)
     upload_dir = os.path.abspath(os.path.join(settings.UPLOAD_DIR, "carrusel"))
     os.makedirs(upload_dir, exist_ok=True)
 
@@ -99,8 +101,10 @@ async def add_carousel_image(
     try:
         # Shift existing orders >= orden up by 1
         db.query(models.CarruselImagen).filter(models.CarruselImagen.activo == True, models.CarruselImagen.orden >= orden).update({models.CarruselImagen.orden: models.CarruselImagen.orden + 1})
+        # Store public URL in DB so frontend can load it directly
+        public_url = f"/app/uploads/carrusel/{unique_name}"
         new_img = models.CarruselImagen(
-            imagen_url=saved_path,
+            imagen_url=public_url,
             orden=orden,
             link_url=link_url,
             created_by=created_by,
@@ -229,6 +233,19 @@ async def delete_carousel_image(imagen_id: int, db: Session = Depends(get_db)):
         logger.error(f"DB error deleting carousel image: {str(e)}")
         db.rollback()
         return JSONResponse(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, content={"status": "error", "message": "Imagen no encontrada."})
+
+    # Try to remove physical file if imagen_url points to uploads folder
+    try:
+        if img.imagen_url and img.imagen_url.startswith("/app/uploads/carrusel/"):
+            filename = os.path.basename(img.imagen_url)
+            filesystem_path = os.path.abspath(os.path.join(settings.UPLOAD_DIR, "carrusel", filename))
+            if os.path.exists(filesystem_path):
+                try:
+                    os.remove(filesystem_path)
+                except Exception as e:
+                    logger.warning(f"Failed to delete file {filesystem_path}: {str(e)}")
+    except Exception:
+        pass
 
     # Reindex remaining active images to be consecutive starting from 1
     try:
@@ -380,3 +397,41 @@ async def bulk_reorder(payload: dict = Body(...), db: Session = Depends(get_db))
             pass
 
     return JSONResponse(status_code=status.HTTP_200_OK, content={"status": "success", "message": "Orden actualizado exitosamente"})
+
+
+@router.post("/upload", tags=["Carousel"])
+async def upload_carrusel_image(file: UploadFile = File(...)):
+    if not file.filename.lower().endswith(('.jpg', '.jpeg', '.png', '.gif')):
+        raise HTTPException(status_code=400, detail="Formato de imagen no permitido")
+    # use configured UPLOAD_DIR
+    upload_dir = os.path.abspath(os.path.join(settings.UPLOAD_DIR, "carrusel"))
+    os.makedirs(upload_dir, exist_ok=True)
+    unique_name = f"{uuid.uuid4().hex}{os.path.splitext(file.filename)[1].lower()}"
+    file_path = os.path.join(upload_dir, unique_name)
+    with open(file_path, "wb") as f:
+        f.write(await file.read())
+    public_url = f"/app/uploads/carrusel/{unique_name}"
+    return JSONResponse({"status": "success", "message": "Imagen subida", "filename": unique_name, "url": public_url})
+
+
+@router.get("/images", tags=["Carousel"])
+async def list_carrusel_images():
+    upload_dir = os.path.abspath(os.path.join(settings.UPLOAD_DIR, "carrusel"))
+    os.makedirs(upload_dir, exist_ok=True)
+    files = [f for f in os.listdir(upload_dir) if f.lower().endswith(('.jpg', '.jpeg', '.png', '.gif'))]
+    urls = [f"/app/uploads/carrusel/{fname}" for fname in files]
+    return {"status": "success", "images": urls}
+
+
+# Public router for frontend (no admin prefix)
+public_router = APIRouter(
+    prefix="/api/carrusel",
+    tags=["carousel-public"]
+)
+
+
+@public_router.get("/images", response_model=List[CarruselImagenResponse])
+async def public_list_images(db: Session = Depends(get_db)):
+    """Return active carousel images for frontend consumption (max 5)."""
+    images = db.query(models.CarruselImagen).filter(models.CarruselImagen.activo == True).order_by(models.CarruselImagen.orden.asc()).limit(5).all()
+    return images

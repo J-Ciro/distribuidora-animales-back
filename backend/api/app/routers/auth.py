@@ -19,7 +19,8 @@ from app.schemas import (
     ResendCodeRequest,
     StandardResponse,
     LoginSuccessResponse,
-    CartMergeInfo
+    CartMergeInfo,
+    UsuarioPublicResponse
 )
 from app.database import get_db
 from app.models import Usuario, VerificationCode, RefreshToken
@@ -460,7 +461,8 @@ async def login(request: LoginRequest, response: Response, db: Session = Depends
         usuario.ultimo_login = datetime.now(timezone.utc)
         
         # 7. Create tokens
-        access_token = security_utils.create_access_token(data={"sub": str(usuario.id)})
+        rol = "admin" if usuario.es_admin else "cliente"
+        access_token = security_utils.create_access_token(data={"sub": str(usuario.id), "rol": rol})
         refresh_token, refresh_token_hash, refresh_token_expires = security_utils.create_refresh_token()
         
         # 8. Store refresh token in DB
@@ -574,3 +576,28 @@ async def logout(response: Response, request: Request, db: Session = Depends(get
     response.delete_cookie(key="refresh_token", path="/api/auth")
     
     return {"status": "success", "message": "Cierre de sesión exitoso"}
+
+def get_current_user(request: Request, db: Session = Depends(get_db)) -> UsuarioPublicResponse:
+    """Extrae el usuario autenticado del JWT Bearer token"""
+    auth_header = request.headers.get("authorization")
+    if not auth_header or not auth_header.lower().startswith("bearer "):
+        raise HTTPException(status_code=401, detail="No autenticado")
+    token = auth_header.split(" ", 1)[1]
+    payload = security_utils.verify_jwt_token(token)
+    user_id = payload.get("sub")
+    if not user_id:
+        raise HTTPException(status_code=401, detail="Token inválido")
+    usuario = db.query(Usuario).filter(Usuario.id == int(user_id)).first()
+    if not usuario or not usuario.is_active:
+        raise HTTPException(status_code=403, detail="Cuenta no activa")
+    rol = "admin" if usuario.es_admin else "cliente"
+    return UsuarioPublicResponse(
+        id=usuario.id,
+        nombre_completo=usuario.nombre_completo,
+        email=usuario.email,
+        rol=rol
+    )
+
+@router.get("/me", response_model=UsuarioPublicResponse)
+async def get_me(current_user: UsuarioPublicResponse = Depends(get_current_user)):
+    return current_user

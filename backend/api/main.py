@@ -4,10 +4,12 @@ Distribuidora Perros y Gatos Backend
 """
 import os
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
+from fastapi.staticfiles import StaticFiles
 
 from app.config import settings
 from app.database import init_db, close_db
@@ -59,6 +61,33 @@ app = FastAPI(
     lifespan=lifespan
 )
 
+# Determine absolute uploads directory inside the running container or local environment
+# Prefer '<base>/uploads' (e.g. '/app/uploads' when WORKDIR=/app), but fall back to '<base>/app/uploads'
+BASE_DIR = Path(__file__).resolve().parent  # directory containing main.py (usually '/app')
+candidate_a = BASE_DIR / "uploads"
+candidate_b = BASE_DIR / "app" / "uploads"
+
+if candidate_a.exists():
+    UPLOADS_DIR = candidate_a
+elif candidate_b.exists():
+    UPLOADS_DIR = candidate_b
+else:
+    # Create the preferred location (candidate_a)
+    UPLOADS_DIR = candidate_a
+    UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
+
+# Ensure carrusel subfolder exists
+(UPLOADS_DIR / "carrusel").mkdir(parents=True, exist_ok=True)
+
+# Synchronize settings.UPLOAD_DIR so other modules use the same absolute path
+try:
+    settings.UPLOAD_DIR = str(UPLOADS_DIR)
+except Exception:
+    pass
+
+# Mount static files so requests to /app/uploads/... are served from the uploads folder
+app.mount("/app/uploads", StaticFiles(directory=str(UPLOADS_DIR)), name="uploads")
+
 # Middleware CORS
 app.add_middleware(
     CORSMiddleware,
@@ -108,6 +137,10 @@ app.include_router(carousel_router, tags=["Carousel"])
 app.include_router(orders_router, tags=["Orders"])
 app.include_router(admin_users_router, tags=["Admin Users"])
 app.include_router(home_products_router, tags=["Home Products"])
+
+# Public carousel router (frontend)
+from app.routers.carousel import public_router as carousel_public_router
+app.include_router(carousel_public_router)
 
 
 if __name__ == "__main__":

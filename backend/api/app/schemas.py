@@ -312,7 +312,7 @@ class UsuarioPublicResponse(BaseModel):
     id: int
     nombre_completo: str
     email: str
-    
+    rol: str
     class Config:
         from_attributes = True
 
@@ -324,7 +324,7 @@ class UsuarioDetailResponse(BaseModel):
     cedula: str
     fecha_registro: datetime
     ultimo_login: Optional[datetime]
-    
+    rol: str
     class Config:
         from_attributes = True
 
