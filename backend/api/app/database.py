@@ -5,8 +5,6 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import declarative_base, sessionmaker, Session
 from typing import Generator
 from app.config import settings
-# Import models to register them with Base
-from app import models  # noqa: F401
 import logging
 
 logger = logging.getLogger(__name__)
@@ -22,9 +20,8 @@ engine = create_engine(
 # Session factory
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
-# Base class for models
+# Base class for models — define early so modules importing Base don't trigger circular import
 Base = declarative_base()
-
 
 def get_db() -> Generator[Session, None, None]:
     """
@@ -41,14 +38,24 @@ def get_db() -> Generator[Session, None, None]:
 def init_db():
     """Initialize database by creating all tables"""
     try:
-       
+        # Import models now that Base is defined so they can register themselves
+        try:
+            import importlib
+            importlib.import_module('app.models')
+        except Exception:
+            logger.error('app.models could not be imported at init_db time', exc_info=True)
+
         # Only create tables if there are models registered
         if Base.metadata.tables:
-            Base.metadata.create_all(bind=engine)
-            logger.info("Database initialized successfully")
-            logger.info(f"Created tables: {list(Base.metadata.tables.keys())}")
+            try:
+                Base.metadata.create_all(bind=engine)
+                logger.info("Database initialized successfully")
+                logger.info(f"Created tables: {list(Base.metadata.tables.keys())}")
+            except Exception:
+                logger.error('Failed to create tables during init_db', exc_info=True)
+                raise
         else:
-            logger.info("No database models found, skipping table creation")
+            logger.warning("No database models found (Base.metadata.tables is empty). Skipping table creation.")
     except Exception as e:
         logger.warning(f"Could not initialize database: {str(e)}")
         logger.warning("Application will continue without database connection")

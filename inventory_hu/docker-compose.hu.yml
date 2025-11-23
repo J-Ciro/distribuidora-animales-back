@@ -1,0 +1,65 @@
+version: '3.8'
+services:
+  api:
+    build:
+      context: ./api
+      dockerfile: Dockerfile
+    container_name: hu_api
+    ports:
+      - "8001:8001"
+    environment:
+      - DB_SERVER=sqlserver
+      - DB_PORT=1433
+      - DB_NAME=distribuidora_db
+      - DB_USER=SA
+      - DB_PASSWORD=yourStrongPassword123#
+      - RABBITMQ_URL=amqp://guest:guest@rabbitmq:5672/
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      sqlserver:
+        condition: service_healthy
+  worker:
+    build:
+      context: ./worker
+      dockerfile: Dockerfile
+    container_name: hu_worker
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      sqlserver:
+        condition: service_healthy
+    environment:
+      - RABBITMQ_URL=amqp://guest:guest@rabbitmq:5672/
+      - DB_SERVER=sqlserver
+      - DB_PORT=1433
+      - DB_NAME=distribuidora_db
+      - DB_USER=sa
+      - DB_PASSWORD=yourStrongPassword123#
+  rabbitmq:
+    image: rabbitmq:3.9-management
+    container_name: hu_rabbitmq
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "ping"]
+      interval: 30s
+      timeout: 30s
+      retries: 3
+  sqlserver:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    container_name: hu_sqlserver
+    environment:
+      - ACCEPT_EULA=Y
+      - SA_PASSWORD=yourStrongPassword123#
+      - MSSQL_PID=Developer
+    ports:
+      - "1434:1433"
+    volumes:
+      - ./sql:/tmp/sql
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/mssql-tools18/bin/sqlcmd -S localhost -U SA -P 'yourStrongPassword123#' -Q 'SELECT 1' || exit 1"]
+      interval: 30s
+      timeout: 20s
+      retries: 10

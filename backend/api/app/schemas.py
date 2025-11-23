@@ -219,6 +219,11 @@ class InventarioHistorialResponse(BaseModel):
         from_attributes = True
 
 
+# Stock update via Producer (manual adjustment)
+class StockUpdateRequest(BaseModel):
+    cantidad: int
+
+
 # Cart Schemas
 class CartItemCreate(BaseModel):
     producto_id: int
