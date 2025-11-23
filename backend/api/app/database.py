@@ -6,6 +6,7 @@ from sqlalchemy.orm import declarative_base, sessionmaker, Session
 from typing import Generator
 from app.config import settings
 import logging
+# Note: models are imported inside init_db() to avoid circular import issues
 
 logger = logging.getLogger(__name__)
 
@@ -38,12 +39,11 @@ def get_db() -> Generator[Session, None, None]:
 def init_db():
     """Initialize database by creating all tables"""
     try:
-        # Import models now that Base is defined so they can register themselves
+        # Import models here to register them with Base and avoid circular imports
         try:
-            import importlib
-            importlib.import_module('app.models')
+            import app.models  # noqa: F401
         except Exception:
-            logger.error('app.models could not be imported at init_db time', exc_info=True)
+            logger.debug("Could not import app.models during init_db; skipping model registration")
 
         # Only create tables if there are models registered
         if Base.metadata.tables:

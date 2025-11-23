@@ -26,7 +26,7 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(
     prefix="/api/admin",
-    tags=["Categories"]
+    tags=["categories"]
 )
 
 
@@ -305,16 +305,18 @@ async def get_categories(db: Session = Depends(get_db)):
         from sqlalchemy import text
         
         # Query para obtener todas las categorías con sus subcategorías
+        # The DB schema uses Spanish column names (fecha_creacion / fecha_actualizacion)
+        # Alias them to the English names expected by the Pydantic response models
         query = text("""
-            SELECT 
+            SELECT
                 c.id,
                 c.nombre,
-                c.created_at,
-                c.updated_at,
-                s.id as subcategoria_id,
-                s.nombre as subcategoria_nombre,
-                s.created_at as subcategoria_created_at,
-                s.updated_at as subcategoria_updated_at
+                c.fecha_creacion AS created_at,
+                c.fecha_actualizacion AS updated_at,
+                s.id AS subcategoria_id,
+                s.nombre AS subcategoria_nombre,
+                s.fecha_creacion AS subcategoria_created_at,
+                ISNULL(s.fecha_creacion, c.fecha_creacion) AS subcategoria_updated_at
             FROM Categorias c
             LEFT JOIN Subcategorias s ON c.id = s.categoria_id
             ORDER BY c.id, s.id
