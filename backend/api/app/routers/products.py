@@ -132,15 +132,40 @@ async def create_product(
 
     # Build message payload for RabbitMQ. Consumer will perform uniqueness and category checks.
     cantidad_disponible = payload.get('cantidad_disponible', 0)
-    # SKU removed: not accepted in request body per new requirement
+
+    # Resolve categoria_id and subcategoria_id: allow the client to send either an integer id
+    # or a name string (e.g. "Perros"). If a name is provided, look it up in the DB.
+    def resolve_category(value, table_name, db_session):
+        # try integer first
+        try:
+            return int(value)
+        except Exception:
+            pass
+        # otherwise try lookup by name (case-insensitive)
+        try:
+            q = text(f"SELECT id FROM {table_name} WHERE LOWER(nombre) = :name")
+            res = db.execute(q, {"name": str(value).strip().lower()}).fetchone()
+            if res:
+                return int(res.id)
+        except Exception:
+            return None
+        return None
+
+    categoria_resolved = resolve_category(categoria_id, 'Categorias', db)
+    subcategoria_resolved = resolve_category(subcategoria_id, 'Subcategorias', db)
+
+    if categoria_resolved is None:
+        return JSONResponse(status_code=status.HTTP_400_BAD_REQUEST, content={"status": "error", "message": "Categoría no encontrada o id inválido."})
+    if subcategoria_resolved is None:
+        return JSONResponse(status_code=status.HTTP_400_BAD_REQUEST, content={"status": "error", "message": "Subcategoría no encontrada o id inválido."})
 
     message = {
         "nombre": nombre.strip(),
         "descripcion": descripcion.strip(),
         "precio": float(precio),
         "peso_gramos": int(peso_gramos),
-        "categoria_id": int(categoria_id),
-        "subcategoria_id": int(subcategoria_id),
+        "categoria_id": int(categoria_resolved),
+        "subcategoria_id": int(subcategoria_resolved),
         "cantidad_disponible": int(cantidad_disponible or 0),
     }
     # Allow cliente to send imagen_b64 and imagen_filename inside the JSON payload
@@ -232,15 +257,15 @@ async def list_products(
     subcats = {}
     try:
         if cat_ids:
-            qcat = text("SELECT id, nombre FROM Categorias WHERE id IN (:ids)").bindparams(ids=tuple(cat_ids))
-            # SQLAlchemy text with IN tuple isn't straightforward; build dynamic list
-            qcat = text(f"SELECT id, nombre FROM Categorias WHERE id IN ({', '.join([str(int(x)) for x in cat_ids])})")
+            # Include created_at/updated_at aliased for Pydantic schemas
+            qcat = text(f"SELECT id, nombre, fecha_creacion AS created_at, fecha_actualizacion AS updated_at FROM Categorias WHERE id IN ({', '.join([str(int(x)) for x in cat_ids])})")
             for c in db.execute(qcat).fetchall():
-                cats[c.id] = {"id": c.id, "nombre": c.nombre}
+                cats[c.id] = {"id": c.id, "nombre": c.nombre, "created_at": c.created_at, "updated_at": c.updated_at}
         if subcat_ids:
-            qsub = text(f"SELECT id, nombre FROM Subcategorias WHERE id IN ({', '.join([str(int(x)) for x in subcat_ids])})")
+            # Subcategorias has only fecha_creacion in schema; provide created_at and updated_at (fallback to fecha_creacion)
+            qsub = text(f"SELECT id, categoria_id, nombre, fecha_creacion AS created_at FROM Subcategorias WHERE id IN ({', '.join([str(int(x)) for x in subcat_ids])})")
             for s in db.execute(qsub).fetchall():
-                subcats[s.id] = {"id": s.id, "nombre": s.nombre}
+                subcats[s.id] = {"id": s.id, "categoria_id": s.categoria_id, "nombre": s.nombre, "created_at": s.created_at, "updated_at": s.created_at}
     except Exception:
         # Non-fatal: proceed without names
         logger.exception("Error fetching category/subcategory names")
@@ -317,11 +342,11 @@ async def get_product(producto_id: int, include_inactive: bool = Query(False), d
         cat_row = None
         sub_row = None
         if producto['categoria_id']:
-            cat_row = db.execute(text("SELECT id, nombre FROM Categorias WHERE id = :id"), {"id": producto['categoria_id']}).first()
+            cat_row = db.execute(text("SELECT id, nombre, fecha_creacion AS created_at, fecha_actualizacion AS updated_at FROM Categorias WHERE id = :id"), {"id": producto['categoria_id']}).first()
         if producto['subcategoria_id']:
-            sub_row = db.execute(text("SELECT id, nombre FROM Subcategorias WHERE id = :id"), {"id": producto['subcategoria_id']}).first()
-        producto['categoria'] = {"id": cat_row.id, "nombre": cat_row.nombre} if cat_row else None
-        producto['subcategoria'] = {"id": sub_row.id, "nombre": sub_row.nombre} if sub_row else None
+            sub_row = db.execute(text("SELECT id, categoria_id, nombre, fecha_creacion AS created_at FROM Subcategorias WHERE id = :id"), {"id": producto['subcategoria_id']}).first()
+        producto['categoria'] = {"id": cat_row.id, "nombre": cat_row.nombre, "created_at": cat_row.created_at, "updated_at": cat_row.updated_at} if cat_row else None
+        producto['subcategoria'] = {"id": sub_row.id, "categoria_id": sub_row.categoria_id, "nombre": sub_row.nombre, "created_at": sub_row.created_at, "updated_at": sub_row.created_at} if sub_row else None
     except Exception:
         logger.exception("Error fetching category/subcategory for product %s", producto_id)
         producto['categoria'] = None
@@ -488,11 +513,11 @@ async def update_product(
         cat_row = None
         sub_row = None
         if producto['categoria_id']:
-            cat_row = db.execute(text("SELECT id, nombre FROM Categorias WHERE id = :id"), {"id": producto['categoria_id']}).first()
+            cat_row = db.execute(text("SELECT id, nombre, fecha_creacion AS created_at, fecha_actualizacion AS updated_at FROM Categorias WHERE id = :id"), {"id": producto['categoria_id']}).first()
         if producto['subcategoria_id']:
-            sub_row = db.execute(text("SELECT id, nombre FROM Subcategorias WHERE id = :id"), {"id": producto['subcategoria_id']}).first()
-        producto['categoria'] = {"id": cat_row.id, "nombre": cat_row.nombre} if cat_row else None
-        producto['subcategoria'] = {"id": sub_row.id, "nombre": sub_row.nombre} if sub_row else None
+            sub_row = db.execute(text("SELECT id, categoria_id, nombre, fecha_creacion AS created_at FROM Subcategorias WHERE id = :id"), {"id": producto['subcategoria_id']}).first()
+        producto['categoria'] = {"id": cat_row.id, "nombre": cat_row.nombre, "created_at": cat_row.created_at, "updated_at": cat_row.updated_at} if cat_row else None
+        producto['subcategoria'] = {"id": sub_row.id, "categoria_id": sub_row.categoria_id, "nombre": sub_row.nombre, "created_at": sub_row.created_at, "updated_at": sub_row.created_at} if sub_row else None
     except Exception:
         logger.exception("Error fetching category/subcategory names after update")
         producto['categoria'] = None

@@ -1,5 +1,5 @@
 from app.database import SessionLocal
-from app import models
+import app.models as models
 from sqlalchemy.exc import IntegrityError
 
 db = SessionLocal()

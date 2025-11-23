@@ -14,7 +14,7 @@ from app.schemas import (
 )
 from app.database import get_db
 from app.utils.rabbitmq import RabbitMQProducer
-from app import models
+import app.models as models
 import logging
 
 logger = logging.getLogger(__name__)
