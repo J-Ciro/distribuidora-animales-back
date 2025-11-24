@@ -6,6 +6,7 @@ from sqlalchemy.orm import declarative_base, sessionmaker, Session
 from typing import Generator
 from app.config import settings
 import logging
+# Note: models are imported inside init_db() to avoid circular import issues
 
 logger = logging.getLogger(__name__)
 
@@ -20,9 +21,8 @@ engine = create_engine(
 # Session factory
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
-# Base class for models
+# Base class for models — define early so modules importing Base don't trigger circular import
 Base = declarative_base()
-
 
 def get_db() -> Generator[Session, None, None]:
     """
@@ -39,12 +39,23 @@ def get_db() -> Generator[Session, None, None]:
 def init_db():
     """Initialize database by creating all tables"""
     try:
+        # Import models here to register them with Base and avoid circular imports
+        try:
+            import app.models  # noqa: F401
+        except Exception:
+            logger.debug("Could not import app.models during init_db; skipping model registration")
+
         # Only create tables if there are models registered
         if Base.metadata.tables:
-            Base.metadata.create_all(bind=engine)
-            logger.info("Database initialized successfully")
+            try:
+                Base.metadata.create_all(bind=engine)
+                logger.info("Database initialized successfully")
+                logger.info(f"Created tables: {list(Base.metadata.tables.keys())}")
+            except Exception:
+                logger.error('Failed to create tables during init_db', exc_info=True)
+                raise
         else:
-            logger.info("No database models found, skipping table creation")
+            logger.warning("No database models found (Base.metadata.tables is empty). Skipping table creation.")
     except Exception as e:
         logger.warning(f"Could not initialize database: {str(e)}")
         logger.warning("Application will continue without database connection")

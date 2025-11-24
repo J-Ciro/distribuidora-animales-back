@@ -280,7 +280,7 @@ lsof -i :8000
 docker ps | grep sqlserver
 
 # Check connection string in .env
-# Default: Server=localhost,1433;Database=DistribuidoraDB;User Id=sa;Password=YourPassword123!;
+# Default: Server=localhost,1433;Database=distribuidora_db;User Id=sa;Password=YourPassword123!;
 
 # Test connection with SQL Server Management Studio (SSMS)
 ```

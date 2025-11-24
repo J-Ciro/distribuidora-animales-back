@@ -4,9 +4,17 @@ Handles HU_MANAGE_ORDERS
 """
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.orm import Session
-from typing import List
-from app.schemas import PedidoResponse, PedidoEstadoUpdate
+from typing import List, Optional
+from sqlalchemy import desc
+from app.schemas import (
+    PedidoCreate,
+    PedidoResponse,
+    PedidoItemResponse,
+    PedidoEstadoUpdate,
+)
 from app.database import get_db
+from app.utils.rabbitmq import RabbitMQProducer
+import app.models as models
 import logging
 
 logger = logging.getLogger(__name__)
@@ -17,7 +25,29 @@ router = APIRouter(
 )
 
 
-@router.get("", response_model=List[PedidoResponse])
+def _pedido_to_response(db, pedido: models.Pedido):
+    items = db.query(models.PedidoItem).filter(models.PedidoItem.pedido_id == pedido.id).all()
+    items_resp = [
+        {
+            "id": item.id,
+            "producto_id": item.producto_id,
+            "cantidad": item.cantidad,
+            "precio_unitario": float(item.precio_unitario),
+        }
+        for item in items
+    ]
+
+    return {
+        "id": pedido.id,
+        "usuario_id": pedido.usuario_id,
+        "estado": pedido.estado,
+        "total": float(pedido.total),
+        "fecha_creacion": pedido.fecha_creacion,
+        "items": items_resp,
+    }
+
+
+@router.get("/", response_model=List[PedidoResponse])
 async def list_orders(
     estado: str = Query(None, regex="^(Pendiente|Enviado|Entregado|Cancelado)$"),
     usuario_id: int = Query(None),
@@ -35,16 +65,98 @@ async def list_orders(
     - Return order with items and total
     - Pagination support
     """
-    # TODO: Implement list orders logic
-    # 1. Query Pedidos table
-    # 2. Apply filters (estado, usuario_id)
-    # 3. Include PedidoItems
-    # 4. Calculate total
-    # 5. Sort by fecha_creacion DESC
-    # 6. Apply pagination
-    # 7. Return orders
-    raise HTTPException(status_code=status.HTTP_501_NOT_IMPLEMENTED, detail="Not implemented")
+    q = db.query(models.Pedido)
+    if estado:
+        q = q.filter(models.Pedido.estado == estado)
+    if usuario_id:
+        q = q.filter(models.Pedido.usuario_id == usuario_id)
 
+    pedidos = q.order_by(desc(models.Pedido.fecha_creacion)).offset(skip).limit(limit).all()
+    return [_pedido_to_response(db, p) for p in pedidos]
+
+@router.post("/", response_model=PedidoResponse, status_code=status.HTTP_201_CREATED)
+async def create_order(payload: PedidoCreate, db: Session = Depends(get_db)):
+    # Validate usuario exists
+    usuario = db.query(models.Usuario).filter(models.Usuario.id == payload.usuario_id).first()
+    if not usuario:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Usuario no existe")
+
+    pedido = models.Pedido(
+        usuario_id=payload.usuario_id,
+        estado='Pendiente',
+        direccion_entrega=payload.direccion_entrega,
+        telefono_contacto=payload.telefono_contacto,
+        nota_especial=payload.nota_especial,
+    )
+    db.add(pedido)
+    db.flush()
+
+    total = 0
+    items_payload = getattr(payload, 'items', []) or []
+    for it in items_payload:
+        producto_id = int(it.get('producto_id'))
+        cantidad = int(it.get('cantidad'))
+        precio = float(it.get('precio_unitario')) if it.get('precio_unitario') is not None else 0.0
+        total += cantidad * precio
+        pi = models.PedidoItem(
+            pedido_id=pedido.id,
+            producto_id=producto_id,
+            cantidad=cantidad,
+            precio_unitario=precio,
+        )
+        db.add(pi)
+
+    pedido.total = total
+    db.add(pedido)
+    db.commit()
+    db.refresh(pedido)
+
+    return _pedido_to_response(db, pedido)
+
+
+@router.put("/{pedido_id}", response_model=PedidoResponse)
+async def update_order(pedido_id: int, payload: PedidoCreate, db: Session = Depends(get_db)):
+    pedido = db.query(models.Pedido).filter(models.Pedido.id == pedido_id).first()
+    if not pedido:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Pedido no encontrado")
+
+    # Update simple fields
+    pedido.direccion_entrega = payload.direccion_entrega
+    pedido.telefono_contacto = payload.telefono_contacto
+    pedido.nota_especial = payload.nota_especial
+    db.add(pedido)
+
+    # Replace items: delete existing and add new
+    db.query(models.PedidoItem).filter(models.PedidoItem.pedido_id == pedido.id).delete()
+    total = 0
+    items_payload = getattr(payload, 'items', []) or []
+    for it in items_payload:
+        producto_id = int(it.get('producto_id'))
+        cantidad = int(it.get('cantidad'))
+        precio = float(it.get('precio_unitario')) if it.get('precio_unitario') is not None else 0.0
+        total += cantidad * precio
+        pi = models.PedidoItem(
+            pedido_id=pedido.id,
+            producto_id=producto_id,
+            cantidad=cantidad,
+            precio_unitario=precio,
+        )
+        db.add(pi)
+
+    pedido.total = total
+    db.commit()
+    db.refresh(pedido)
+    return _pedido_to_response(db, pedido)
+
+
+@router.delete("/{pedido_id}")
+async def delete_order(pedido_id: int, db: Session = Depends(get_db)):
+    pedido = db.query(models.Pedido).filter(models.Pedido.id == pedido_id).first()
+    if not pedido:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Pedido no encontrado")
+    db.delete(pedido)
+    db.commit()
+    return {"status": "success", "message": "Pedido eliminado"}
 
 @router.get("/{pedido_id}", response_model=PedidoResponse)
 async def get_order(pedido_id: int, db: Session = Depends(get_db)):
@@ -56,11 +168,13 @@ async def get_order(pedido_id: int, db: Session = Depends(get_db)):
     - Include all PedidoItems with product info
     - Include estado history
     """
-    # TODO: Implement get order logic
-    raise HTTPException(status_code=status.HTTP_501_NOT_IMPLEMENTED, detail="Not implemented")
+    pedido = db.query(models.Pedido).filter(models.Pedido.id == pedido_id).first()
+    if not pedido:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Pedido no encontrado")
+    return _pedido_to_response(db, pedido)
 
 
-@router.put("/{pedido_id}/estado")
+@router.put("/{pedido_id}/status", response_model=PedidoResponse)
 async def update_order_status(
     pedido_id: int,
     request: PedidoEstadoUpdate,
@@ -76,17 +190,54 @@ async def update_order_status(
     - Publishes pedido.estado.cambiar queue message
     - Include optional nota with change reason
     """
-    # TODO: Implement update order status logic
+    pedido = db.query(models.Pedido).filter(models.Pedido.id == pedido_id).first()
+    if not pedido:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Pedido no encontrado")
+
+    estado_anterior = pedido.estado
+    pedido.estado = request.estado
+    db.add(pedido)
+
+    historial = models.PedidosHistorialEstado(
+        pedido_id=pedido.id,
+        estado_anterior=estado_anterior,
+        estado_nuevo=request.estado,
+        usuario_id=None,
+        nota=request.nota,
+    )
+    db.add(historial)
+    db.commit()
+    db.refresh(pedido)
+
+    # Publish event to RabbitMQ (best-effort)
+    try:
+        producer = RabbitMQProducer()
+        producer.connect()
+        message = {
+            "pedido_id": pedido.id,
+            "estado_anterior": estado_anterior,
+            "estado_nuevo": request.estado,
+        }
+        producer.publish("pedido.estado.cambiado", message)
+    except Exception:
+        # do not fail the request if publishing fails
+        pass
+    finally:
+        try:
+            producer.close()
+        except Exception:
+            pass
+
+    return _pedido_to_response(db, pedido)
     # 1. Validate pedido exists
     # 2. Validate new estado
     # 3. Update Pedido.estado
     # 4. Create PedidosHistorialEstado entry
     # 5. Publish pedido.estado.cambiar queue message
     # 6. Return updated order
-    raise HTTPException(status_code=status.HTTP_501_NOT_IMPLEMENTED, detail="Not implemented")
 
 
-@router.get("/{pedido_id}/historial")
+@router.get("/{pedido_id}/history")
 async def get_order_history(pedido_id: int, db: Session = Depends(get_db)):
     """
     Get order status change history
@@ -97,11 +248,29 @@ async def get_order_history(pedido_id: int, db: Session = Depends(get_db)):
     - Include usuario_id who made change
     - Include change notes
     """
-    # TODO: Implement order history logic
-    raise HTTPException(status_code=status.HTTP_501_NOT_IMPLEMENTED, detail="Not implemented")
+    items = (
+        db.query(models.PedidosHistorialEstado)
+        .filter(models.PedidosHistorialEstado.pedido_id == pedido_id)
+        .order_by(desc(models.PedidosHistorialEstado.fecha))
+        .all()
+    )
+
+    return [
+        {
+            "id": it.id,
+            "pedido_id": it.pedido_id,
+            "estado_anterior": it.estado_anterior,
+            "estado_nuevo": it.estado_nuevo,
+            "usuario_id": it.usuario_id,
+            "nota": it.nota,
+            "fecha": it.fecha,
+        }
+        for it in items
+    ]
+    
 
 
-@router.get("/usuario/{usuario_id}")
+@router.get("/user/{usuario_id}", response_model=List[PedidoResponse])
 async def get_user_orders(
     usuario_id: int,
     skip: int = Query(0, ge=0),
@@ -116,5 +285,11 @@ async def get_user_orders(
     - Pagination support
     - Return orders with items
     """
-    # TODO: Implement get user orders logic
+    pedidos = (
+        db.query(models.Pedido)
+        .filter(models.Pedido.usuario_id == usuario_id)
+        .order_by(desc(models.Pedido.fecha_creacion))
+        .all()
+    )
+    return [_pedido_to_response(db, p) for p in pedidos]
     raise HTTPException(status_code=status.HTTP_501_NOT_IMPLEMENTED, detail="Not implemented")

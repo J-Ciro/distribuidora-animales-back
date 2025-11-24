@@ -11,6 +11,8 @@ services:
         condition: service_healthy
       sqlserver:
         condition: service_healthy
+      db-migrator:
+        condition: service_completed_successfully
     environment:
       - RABBITMQ_URL=amqp://guest:guest@rabbitmq:5672/
       - DB_SERVER=sqlserver
@@ -24,6 +26,8 @@ services:
       - RABBITMQ_PASSWORD=guest
     networks:
       - distribuidora-network
+    volumes:
+      - ./backend/api/app/uploads:/app/uploads   # persistir uploads entre reinicios y hacerlo accesible desde contenedor
 
   worker:
     build:
@@ -35,12 +39,14 @@ services:
         condition: service_healthy
       sqlserver:
         condition: service_healthy
+      db-migrator:
+        condition: service_completed_successfully
     environment:
       - RABBITMQ_URL=amqp://guest:guest@rabbitmq:5672/
-      - SMTP_HOST=your_smtp_host
+      - SMTP_HOST=email-smtp.<region>.amazonaws.com
       - SMTP_PORT=587
-      - SMTP_USER=your_smtp_user
-      - SMTP_PASS=your_smtp_password
+      - SMTP_USER=AKIA4LK5VLMNEWTDJQVS
+      - SMTP_PASS=BHmouW5kBsfS7VtHFpk78UzcevCMFfSScvrBUWNHPHTP
       - DB_SERVER=sqlserver
       - DB_PORT=1433
       - DB_NAME=distribuidora_db
@@ -92,6 +98,18 @@ services:
       retries: 10
       start_period: 120s
     restart: unless-stopped
+    networks:
+      - distribuidora-network
+
+  db-migrator:
+    image: mcr.microsoft.com/mssql-tools # This image contains sqlcmd
+    container_name: distribuidora-db-migrator
+    volumes:
+      - ./sql:/docker-entrypoint-initdb.d # Mount the entire sql directory
+    command: /bin/bash /docker-entrypoint-initdb.d/init-db.sh
+    depends_on:
+      sqlserver:
+        condition: service_healthy
     networks:
       - distribuidora-network
 
