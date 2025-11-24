@@ -628,6 +628,21 @@ def get_current_user(request: Request, db: Session = Depends(get_db)) -> Usuario
         rol=rol
     )
 
+
+def require_admin(current_user: UsuarioPublicResponse = Depends(get_current_user)) -> UsuarioPublicResponse:
+    """Dependency to require that the current user is an admin.
+
+    Use in endpoints as:
+        @router.get(...)
+        def admin_only_endpoint(current_user: UsuarioPublicResponse = Depends(require_admin)):
+            # current_user is guaranteed to be admin
+            ...
+    Or as a dependency in the router declaration: `dependencies=[Depends(require_admin)]`.
+    """
+    if current_user.rol != "admin":
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail={"status": "error", "message": "Privilegios insuficientes."})
+    return current_user
+
 @router.get("/me", response_model=UsuarioPublicResponse)
 async def get_me(current_user: UsuarioPublicResponse = Depends(get_current_user)):
     return current_user

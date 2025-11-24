@@ -311,12 +311,12 @@ async def get_categories(db: Session = Depends(get_db)):
             SELECT
                 c.id,
                 c.nombre,
-                c.fecha_creacion AS created_at,
-                c.fecha_actualizacion AS updated_at,
+                c.fecha_creacion AS fecha_creacion,
+                c.fecha_actualizacion AS fecha_actualizacion,
                 s.id AS subcategoria_id,
                 s.nombre AS subcategoria_nombre,
-                s.fecha_creacion AS subcategoria_created_at,
-                ISNULL(s.fecha_creacion, c.fecha_creacion) AS subcategoria_updated_at
+                s.fecha_creacion AS subcategoria_fecha_creacion,
+                ISNULL(s.fecha_creacion, c.fecha_creacion) AS subcategoria_fecha_actualizacion
             FROM Categorias c
             LEFT JOIN Subcategorias s ON c.id = s.categoria_id
             ORDER BY c.id, s.id
@@ -333,8 +333,8 @@ async def get_categories(db: Session = Depends(get_db)):
                 categorias_dict[categoria_id] = {
                     "id": categoria_id,
                     "nombre": row.nombre,
-                    "fecha_creacion": row.fecha_creacion,
-                    "fecha_actualizacion": row.fecha_actualizacion,
+                    "fecha_creacion": getattr(row, 'fecha_creacion', None),
+                    "fecha_actualizacion": getattr(row, 'fecha_actualizacion', None),
                     "subcategorias": []
                 }
             
@@ -342,12 +342,13 @@ async def get_categories(db: Session = Depends(get_db)):
             if row.subcategoria_id:
                 # Some DB schemas may not have a separate fecha_actualizacion for subcategorias;
                 # fall back to fecha_creacion when fecha_actualizacion is absent.
-                sub_updated = getattr(row, 'subcategoria_actualizacion', None) or row.subcategoria_created_at
+                sub_created = getattr(row, 'subcategoria_fecha_creacion', None)
+                sub_updated = getattr(row, 'subcategoria_fecha_actualizacion', None) or sub_created
                 categorias_dict[categoria_id]["subcategorias"].append({
                     "id": row.subcategoria_id,
                     "categoria_id": categoria_id,
                     "nombre": row.subcategoria_nombre,
-                    "created_at": row.subcategoria_created_at,
+                    "created_at": sub_created,
                     "updated_at": sub_updated
                 })
         
@@ -361,7 +362,7 @@ async def get_categories(db: Session = Depends(get_db)):
                 id=cat_data["id"],
                 nombre=cat_data["nombre"],
                 created_at=cat_data["fecha_creacion"],
-                updated_at=cat_data["fecha_actualizacion"],
+                updated_at=(cat_data.get("fecha_actualizacion") or cat_data.get("fecha_creacion")),
                 subcategorias=subcategorias
             )
             categorias_list.append(categoria)
