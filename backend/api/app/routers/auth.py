@@ -364,28 +364,28 @@ async def resend_code(request: ResendCodeRequest, db: Session = Depends(get_db))
         
         db.flush()
         
-        # 7. Publish message to RabbitMQ
+        # 7. Publish message to RabbitMQ queue expected by the worker: email.notifications
         request_id = str(uuid.uuid4())
+        subject = "Verifica tu correo electrónico - Distribuidora Perros y Gatos"
         message = {
             "requestId": request_id,
-            "action": "send_verification_email",
-            "payload": {
-                "usuarioId": usuario.id,
-                "email": usuario.email,
+            "to": usuario.email,
+            "subject": subject,
+            "template": "verification",
+            "context": {
+                "name": usuario.nombre_completo,
                 "code": verification_code,
-                "nombre": usuario.nombre_completo
+                "year": datetime.now().year,
+                "subject": subject
             },
-            "meta": {
-                "timestamp": datetime.now(timezone.utc).isoformat(),
-                "retry": 0
-            }
+            "timestamp": datetime.now(timezone.utc).isoformat()
         }
-        
+
         try:
-            rabbitmq_producer.publish("email.verification", message, durable=True)
+            rabbitmq_producer.publish("email.notifications", message, durable=True)
             logger.info(f"Published resend verification email for user {usuario.id}, requestId: {request_id}")
         except Exception as e:
-            logger.error(f"Failed to publish to RabbitMQ: {str(e)}")
+            logger.error(f"Failed to publish to RabbitMQ (email.notifications): {str(e)}")
             # Don't fail the resend if RabbitMQ is down
         
         db.commit()

@@ -238,9 +238,10 @@ async def list_products(
             for c in db.execute(qcat).fetchall():
                 cats[c.id] = {"id": c.id, "nombre": c.nombre, "created_at": c.fecha_creacion, "updated_at": c.fecha_actualizacion}
         if subcat_ids:
-            qsub = text(f"SELECT id, nombre, categoria_id, fecha_creacion, fecha_actualizacion FROM Subcategorias WHERE id IN ({', '.join([str(int(x)) for x in subcat_ids])})")
+            # Subcategorias table may not have fecha_actualizacion column in some DBs
+            qsub = text(f"SELECT id, nombre, categoria_id, fecha_creacion, NULL as fecha_actualizacion FROM Subcategorias WHERE id IN ({', '.join([str(int(x)) for x in subcat_ids])})")
             for s in db.execute(qsub).fetchall():
-                subcats[s.id] = {"id": s.id, "nombre": s.nombre, "categoria_id": s.categoria_id, "created_at": s.fecha_creacion, "updated_at": s.fecha_actualizacion}
+                subcats[s.id] = {"id": s.id, "nombre": s.nombre, "categoria_id": s.categoria_id, "created_at": s.fecha_creacion, "updated_at": (getattr(s, 'fecha_actualizacion', None) or s.fecha_creacion)}
     except Exception:
         # Non-fatal: proceed without names
         logger.exception("Error fetching category/subcategory names")
@@ -319,9 +320,9 @@ async def get_product(producto_id: int, include_inactive: bool = Query(False), d
         if producto['categoria_id']:
             cat_row = db.execute(text("SELECT id, nombre, fecha_creacion, fecha_actualizacion FROM Categorias WHERE id = :id"), {"id": producto['categoria_id']}).first()
         if producto['subcategoria_id']:
-            sub_row = db.execute(text("SELECT id, nombre, categoria_id, fecha_creacion, fecha_actualizacion FROM Subcategorias WHERE id = :id"), {"id": producto['subcategoria_id']}).first()
+            sub_row = db.execute(text("SELECT id, nombre, categoria_id, fecha_creacion, NULL as fecha_actualizacion FROM Subcategorias WHERE id = :id"), {"id": producto['subcategoria_id']}).first()
         producto['categoria'] = {"id": cat_row.id, "nombre": cat_row.nombre, "created_at": cat_row.fecha_creacion, "updated_at": cat_row.fecha_actualizacion} if cat_row else None
-        producto['subcategoria'] = {"id": sub_row.id, "nombre": sub_row.nombre, "categoria_id": sub_row.categoria_id, "created_at": sub_row.fecha_creacion, "updated_at": sub_row.fecha_actualizacion} if sub_row else None
+        producto['subcategoria'] = {"id": sub_row.id, "nombre": sub_row.nombre, "categoria_id": sub_row.categoria_id, "created_at": sub_row.fecha_creacion, "updated_at": (getattr(sub_row, 'fecha_actualizacion', None) or sub_row.fecha_creacion)} if sub_row else None
     except Exception:
         logger.exception("Error fetching category/subcategory for product %s", producto_id)
         producto['categoria'] = None
@@ -369,18 +370,11 @@ async def update_product(
     if not data:
         return JSONResponse(status_code=status.HTTP_400_BAD_REQUEST, content={"status": "error", "message": "No se proporcionaron campos para actualizar."})
 
-    # Validate nombre uniqueness if provided
+    # Validate nombre if provided (only validate length on update — allow same names)
     if 'nombre' in data and data.get('nombre'):
         nombre_val = data.get('nombre').strip()
         if len(nombre_val) < 2:
             return JSONResponse(status_code=status.HTTP_400_BAD_REQUEST, content={"status": "error", "message": "El nombre debe tener al menos 2 caracteres."})
-        try:
-            dup = db.execute(text("SELECT id FROM Productos WHERE LOWER(nombre) = :name AND id <> :id"), {"name": nombre_val.lower(), "id": producto_id}).first()
-        except Exception as e:
-            logger.exception("Error checking duplicate name during update: %s", e)
-            return JSONResponse(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, content={"status": "error", "message": "Error interno al verificar duplicados."})
-        if dup:
-            return JSONResponse(status_code=status.HTTP_400_BAD_REQUEST, content={"status": "error", "message": "Ya existe un producto con ese nombre."})
 
     # Validate numeric constraints (Pydantic already enforces but double-check)
     if 'precio' in data:
@@ -490,9 +484,9 @@ async def update_product(
         if producto['categoria_id']:
             cat_row = db.execute(text("SELECT id, nombre, fecha_creacion, fecha_actualizacion FROM Categorias WHERE id = :id"), {"id": producto['categoria_id']}).first()
         if producto['subcategoria_id']:
-            sub_row = db.execute(text("SELECT id, nombre, categoria_id, fecha_creacion, fecha_actualizacion FROM Subcategorias WHERE id = :id"), {"id": producto['subcategoria_id']}).first()
+            sub_row = db.execute(text("SELECT id, nombre, categoria_id, fecha_creacion, NULL as fecha_actualizacion FROM Subcategorias WHERE id = :id"), {"id": producto['subcategoria_id']}).first()
         producto['categoria'] = {"id": cat_row.id, "nombre": cat_row.nombre, "created_at": cat_row.fecha_creacion, "updated_at": cat_row.fecha_actualizacion} if cat_row else None
-        producto['subcategoria'] = {"id": sub_row.id, "nombre": sub_row.nombre, "categoria_id": sub_row.categoria_id, "created_at": sub_row.fecha_creacion, "updated_at": sub_row.fecha_actualizacion} if sub_row else None
+        producto['subcategoria'] = {"id": sub_row.id, "nombre": sub_row.nombre, "categoria_id": sub_row.categoria_id, "created_at": sub_row.fecha_creacion, "updated_at": (getattr(sub_row, 'fecha_actualizacion', None) or sub_row.fecha_creacion)} if sub_row else None
     except Exception:
         logger.exception("Error fetching category/subcategory names after update")
         producto['categoria'] = None

@@ -248,15 +248,28 @@ export async function updateCategoria(payload: UpdateCategoriaPayload): Promise<
         };
       }
       
-      // Actualizar categoría
+      // Actualizar categoría - intentar updated_at y fallback a fecha_actualizacion
       const updateRequest = new mssql.Request(transaction);
       updateRequest.input('nombre', mssql.VarChar, nombre);
       updateRequest.input('id', mssql.Int, categoriaId);
-      await updateRequest.query(`
-        UPDATE Categorias 
-        SET nombre = @nombre, updated_at = GETUTCDATE()
-        WHERE id = @id
-      `);
+      try {
+        await updateRequest.query(`
+          UPDATE Categorias 
+          SET nombre = @nombre, updated_at = GETUTCDATE()
+          WHERE id = @id
+        `);
+      } catch (colErr: any) {
+        if (colErr.number === 207 || (colErr.message && colErr.message.includes('Invalid column name'))) {
+          logger.warn('Column updated_at not found on Categorias, trying fecha_actualizacion');
+          await updateRequest.query(`
+            UPDATE Categorias
+            SET nombre = @nombre, fecha_actualizacion = GETUTCDATE()
+            WHERE id = @id
+          `);
+        } else {
+          throw colErr;
+        }
+      }
       
       await transaction.commit();
       
@@ -367,20 +380,43 @@ export async function createSubcategoria(payload: CreateSubcategoriaPayload): Pr
         };
       }
       
-      // Insertar subcategoría
+      // Insertar subcategoría - intentar con created_at/updated_at y fallback a fecha_creacion/fecha_actualizacion
       const insertRequest = new mssql.Request(transaction);
       insertRequest.input('nombre', mssql.VarChar, nombre);
       insertRequest.input('categoriaId', mssql.Int, categoriaId);
-      const result = await insertRequest.query(`
-        INSERT INTO Subcategorias (categoria_id, nombre, created_at, updated_at)
-        OUTPUT INSERTED.id, INSERTED.categoria_id, INSERTED.nombre, INSERTED.created_at, INSERTED.updated_at
-        VALUES (@categoriaId, @nombre, GETUTCDATE(), GETUTCDATE())
-      `);
-      
+
+      let result;
+      try {
+        result = await insertRequest.query(`
+          INSERT INTO Subcategorias (categoria_id, nombre, created_at, updated_at)
+          OUTPUT INSERTED.id, INSERTED.categoria_id, INSERTED.nombre, INSERTED.created_at, INSERTED.updated_at
+          VALUES (@categoriaId, @nombre, GETUTCDATE(), GETUTCDATE())
+        `);
+      } catch (columnError: any) {
+        // Si las columnas created_at/updated_at no existen, intentar con fecha_creacion/fecha_actualizacion
+        if (columnError.number === 207 || (columnError.message && columnError.message.includes('Invalid column name'))) {
+          logger.warn('Columns created_at/updated_at not found on Subcategorias, trying fecha_creacion/fecha_actualizacion');
+          result = await insertRequest.query(`
+            INSERT INTO Subcategorias (categoria_id, nombre, fecha_creacion)
+            OUTPUT INSERTED.id, INSERTED.categoria_id, INSERTED.nombre, INSERTED.fecha_creacion
+            VALUES (@categoriaId, @nombre, GETUTCDATE())
+          `);
+          // Normalize returned fields for compatibility
+          if (result && result.recordset && result.recordset[0]) {
+            const rec = result.recordset[0];
+            // Map fecha_creacion -> created_at and set updated_at to fecha_creacion (fallback)
+            rec.created_at = rec.fecha_creacion;
+            rec.updated_at = rec.fecha_creacion;
+          }
+        } else {
+          throw columnError;
+        }
+      }
+
       await transaction.commit();
-      
+
       logger.info(`Subcategory created successfully: ${result.recordset[0].id}`);
-      
+
       return {
         status: 'success',
         message: 'Subcategoría creada exitosamente',
@@ -503,15 +539,28 @@ export async function updateSubcategoria(payload: UpdateSubcategoriaPayload): Pr
         };
       }
       
-      // Actualizar subcategoría
+      // Actualizar subcategoría - intentar actualizar updated_at y fallback a fecha_actualizacion
       const updateRequest = new mssql.Request(transaction);
       updateRequest.input('nombre', mssql.VarChar, nombre);
       updateRequest.input('id', mssql.Int, subcategoriaId);
-      await updateRequest.query(`
-        UPDATE Subcategorias 
-        SET nombre = @nombre, updated_at = GETUTCDATE()
-        WHERE id = @id
-      `);
+      try {
+        await updateRequest.query(`
+          UPDATE Subcategorias 
+          SET nombre = @nombre, updated_at = GETUTCDATE()
+          WHERE id = @id
+        `);
+      } catch (colErr: any) {
+        if (colErr.number === 207 || (colErr.message && colErr.message.includes('Invalid column name'))) {
+          logger.warn('Column updated_at not found on Subcategorias, trying fecha_actualizacion');
+          await updateRequest.query(`
+            UPDATE Subcategorias
+            SET nombre = @nombre, fecha_actualizacion = GETUTCDATE()
+            WHERE id = @id
+          `);
+        } else {
+          throw colErr;
+        }
+      }
       
       await transaction.commit();
       

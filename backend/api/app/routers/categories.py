@@ -309,12 +309,12 @@ async def get_categories(db: Session = Depends(get_db)):
             SELECT 
                 c.id,
                 c.nombre,
-                c.created_at,
-                c.updated_at,
+                c.fecha_creacion,
+                c.fecha_actualizacion,
                 s.id as subcategoria_id,
                 s.nombre as subcategoria_nombre,
-                s.created_at as subcategoria_created_at,
-                s.updated_at as subcategoria_updated_at
+                s.fecha_creacion as subcategoria_created_at,
+                NULL as subcategoria_actualizacion
             FROM Categorias c
             LEFT JOIN Subcategorias s ON c.id = s.categoria_id
             ORDER BY c.id, s.id
@@ -331,19 +331,22 @@ async def get_categories(db: Session = Depends(get_db)):
                 categorias_dict[categoria_id] = {
                     "id": categoria_id,
                     "nombre": row.nombre,
-                    "created_at": row.created_at,
-                    "updated_at": row.updated_at,
+                    "fecha_creacion": row.fecha_creacion,
+                    "fecha_actualizacion": row.fecha_actualizacion,
                     "subcategorias": []
                 }
             
             # Agregar subcategoría si existe
             if row.subcategoria_id:
+                # Some DB schemas may not have a separate fecha_actualizacion for subcategorias;
+                # fall back to fecha_creacion when fecha_actualizacion is absent.
+                sub_updated = getattr(row, 'subcategoria_actualizacion', None) or row.subcategoria_created_at
                 categorias_dict[categoria_id]["subcategorias"].append({
                     "id": row.subcategoria_id,
                     "categoria_id": categoria_id,
                     "nombre": row.subcategoria_nombre,
                     "created_at": row.subcategoria_created_at,
-                    "updated_at": row.subcategoria_updated_at
+                    "updated_at": sub_updated
                 })
         
         # Convertir a lista de CategoriaResponse
@@ -355,8 +358,8 @@ async def get_categories(db: Session = Depends(get_db)):
             categoria = CategoriaResponse(
                 id=cat_data["id"],
                 nombre=cat_data["nombre"],
-                created_at=cat_data["created_at"],
-                updated_at=cat_data["updated_at"],
+                created_at=cat_data["fecha_creacion"],
+                updated_at=cat_data["fecha_actualizacion"],
                 subcategorias=subcategorias
             )
             categorias_list.append(categoria)

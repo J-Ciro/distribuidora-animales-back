@@ -43,10 +43,10 @@ services:
         condition: service_completed_successfully
     environment:
       - RABBITMQ_URL=amqp://guest:guest@rabbitmq:5672/
-      - SMTP_HOST=your_smtp_host
+      - SMTP_HOST=email-smtp.<region>.amazonaws.com
       - SMTP_PORT=587
-      - SMTP_USER=your_smtp_user
-      - SMTP_PASS=your_smtp_password
+      - SMTP_USER=AKIA4LK5VLMNEWTDJQVS
+      - SMTP_PASS=BHmouW5kBsfS7VtHFpk78UzcevCMFfSScvrBUWNHPHTP
       - DB_SERVER=sqlserver
       - DB_PORT=1433
       - DB_NAME=distribuidora_db
