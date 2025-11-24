@@ -85,271 +85,114 @@ Backend API for Distribuidora Perros y Gatos e-commerce platform - a multi-vendo
 - **Email**: Nodemailer
 - **API**: Express.js (health checks only)
 
-### Infrastructure
-- **Containerization**: Docker & Docker Compose
-- **Database**: SQL Server 2022
-- **Message Broker**: RabbitMQ 3.12
+ 🚀 Funcionalidades Implementadas
 
-## Features Implemented
+## HU_REGISTER_USER ✓
+- Registro de usuarios con verificación por correo  
+- Código de verificación de 6 dígitos (expira en 10 minutos)  
+- Validación de contraseña fuerte (10+ caracteres, mayúscula, dígito, caracter especial)  
+- Envío de correo por RabbitMQ  
 
-### HU_REGISTER_USER ✓
-- User registration with email verification
-- 6-digit verification code (10-min expiry)
-- Password strength validation (10+ chars, uppercase, digit, special char)
-- Sends verification email via RabbitMQ queue
+## HU_LOGIN_USER ✓
+- Autenticación email/contraseña con bcrypt  
+- JWT (acceso 15 min, refresh 7 días)  
+- Unificación del carrito entre dispositivos  
+- Limitación de intentos fallidos (5 intentos → bloqueo 15 min)  
 
-### HU_LOGIN_USER ✓
-- Email/password authentication with bcrypt
-- JWT access token (15-min) + refresh token (7-day)
-- Cart merging across devices
-- Failed login rate limiting (5 attempts = 15-min lockout)
+## HU_CREATE_PRODUCT ✓
+- Creación de productos por administrador  
+- Validación completa  
+- Subida de imágenes (10MB máx, jpg/png/svg/webp)  
+- Categoría / Subcategoría  
+- Inventario + SKU  
 
-### HU_CREATE_PRODUCT ✓
-- Admin product creation with validation
-- Image uploads (max 10MB, jpg/png/svg/webp)
-- Category/subcategory selection
-- Stock management
-- SKU support
+## HU_MANAGE_CATEGORIES ✓
+- CRUD de categorías y subcategorías  
+- Unicidad sin distinguir mayúsculas  
+- No permite eliminar categorías con productos  
+- Procesamiento asíncrono con RabbitMQ  
 
-### HU_MANAGE_CATEGORIES ✓
-- Category and subcategory CRUD
-- Case-insensitive name uniqueness
-- Cannot delete categories with products
-- Async processing via RabbitMQ
+## HU_MANAGE_INVENTORY ✓
+- Reabastecimiento con auditoría  
+- Historial de movimientos  
+- Rate limiting  
+- Tipos: reabastecimiento, venta, ajuste, devolución  
 
-### HU_MANAGE_INVENTORY ✓
-- Product restocking with audit trail
-- Stock history tracking (InventarioHistorial)
-- Rate limiting on restock operations
-- Multiple movement types (reabastecimiento, venta, ajuste, devolucion)
+## HU_MANAGE_CAROUSEL ✓
+- Gestión de imágenes del carrusel  
+- Máx. 5 imágenes  
+- Reordenamiento  
+- URL opcional  
 
-### HU_MANAGE_CAROUSEL ✓
-- Homepage carousel image management
-- Max 5 images with ordered positioning
-- Image reordering functionality
-- Optional link URLs
+## HU_MANAGE_ORDERS ✓
+- Vista admin de pedidos  
+- Flujo de estados: Pendiente → Enviado → Entregado/Cancelado  
+- Historial de cambios  
+- Búsqueda para clientes  
 
-### HU_MANAGE_ORDERS ✓
-- Admin order viewing with filtering
-- Status transitions (Pendiente → Enviado → Entregado / Cancelado)
-- Order status history audit trail
-- Customer order lookup
+## HU_MANAGE_USERS ✓
+- Visualización de perfil del cliente  
+- Búsqueda por nombre/email/cedula  
+- Historial de pedidos  
+- Estadísticas del usuario  
 
-### HU_MANAGE_USERS ✓
-- Customer profile viewing (read-only)
-- Search by name/email/cedula
-- Order history per customer
-- User statistics (total spent, order count, etc.)
+## HU_HOME_PRODUCTS ✓
+- Listado por categoría/subcategoría  
+- Carrito anónimo y autenticado  
+- Validación de stock  
+- Gestión de ítems en el carrito  
 
-### HU_HOME_PRODUCTS ✓
-- Product browsing by category/subcategory
-- Anonymous and authenticated carts
-- Stock validation on add-to-cart
-- Cart item management
+---
 
-## RabbitMQ Message Queues
+# 📩 Colas RabbitMQ
 
-14 async processing queues configured:
+14 colas configuradas:
 
-1. `email.verification` - Verification email sending
-2. `email.password-reset` - Password reset emails
-3. `email.order-confirmation` - Order confirmation emails
-4. `email.order-status-update` - Order status update emails
-5. `productos.crear` - Product creation processing
-6. `productos.actualizar` - Product update processing
-7. `productos.imagen.crear` - Product image upload
-8. `productos.imagen.eliminar` - Product image deletion
-9. `categorias.crear` - Category creation
-10. `categorias.actualizar` - Category updates
-11. `carrusel.imagen.crear` - Carousel image addition
-12. `carrusel.imagen.eliminar` - Carousel image deletion
-13. `carrusel.imagen.reordenar` - Carousel image reordering
-14. `pedido.estado.cambiar` - Order status change notifications
+1. `email.verification`  
+2. `email.password-reset`  
+3. `email.order-confirmation`  
+4. `email.order-status-update`  
+5. `productos.crear`  
+6. `productos.actualizar`  
+7. `productos.imagen.crear`  
+8. `productos.imagen.eliminar`  
+9. `categorias.crear`  
+10. `categorias.actualizar`  
+11. `carrusel.imagen.crear`  
+12. `carrusel.imagen.eliminar`  
+13. `carrusel.imagen.reordenar`  
+14. `pedido.estado.cambiar`  
 
-## Database Schema
+---
 
-14 core tables:
-- `Usuarios` - User accounts
-- `Categorias` - Product categories
-- `Subcategorias` - Product subcategories
-- `Productos` - Product catalog
-- `ProductoImagenes` - Product images
-- `CarruselImagenes` - Homepage carousel
-- `Carts` - Shopping carts (anonymous + authenticated)
-- `CartItems` - Cart items
-- `Pedidos` - Customer orders
-- `PedidoItems` - Order items
-- `PedidosHistorialEstado` - Order status history
-- `InventarioHistorial` - Stock change audit trail
-- `VerificationCodes` - Email verification codes
-- `RefreshTokens` - JWT refresh token management
+# 🗄️ Esquema de Base de Datos (14 tablas)
 
-## Getting Started
+- `Usuarios`  
+- `Categorias`  
+- `Subcategorias`  
+- `Productos`  
+- `ProductoImagenes`  
+- `CarruselImagenes`  
+- `Carts`  
+- `CartItems`  
+- `Pedidos`  
+- `PedidoItems`  
+- `PedidosHistorialEstado`  
+- `InventarioHistorial`  
+- `VerificationCodes`  
+- `RefreshTokens`  
 
-### Prerequisites
-- Docker & Docker Compose
-- Or: Python 3.11+, Node.js 18+, SQL Server, RabbitMQ
+---
 
-### Setup with Docker
+# 🏁 Getting Started
 
-```bash
-# Build and start all services
-docker-compose up -d
+## Requisitos
+- Docker y Docker Compose  
+- O: Python 3.11+, Node.js 18+, SQL Server, RabbitMQ  
 
-# Database will initialize automatically
-# API will be available at http://localhost:8000
-# RabbitMQ UI at http://localhost:15672 (guest/guest)
-```
+---
 
-### Local Development Setup
+# 🐳 Setup con Docker
 
-#### Backend (FastAPI)
-```bash
-cd backend/api
-
-# Create virtual environment
-python -m venv venv
-source venv/bin/activate  # or venv\Scripts\activate on Windows
-
-# Install dependencies
-pip install -r requirements.txt
-
-# Copy and configure .env
-cp .env.example .env
-# Edit .env with your settings
-
-# Run migrations
-# (Schema will auto-create via SQLAlchemy)
-
-# Start server
-uvicorn main:app --reload --port 8000
-```
-
-#### Worker (Node.js)
-```bash
-cd backend/worker
-
-# Install dependencies
-npm install
-
-# Copy and configure .env
-cp .env.example .env
-# Edit .env with your settings
-
-# Development with ts-node
-npm run dev
-
-# Production build
-npm run build
-npm start
-```
-
-## API Documentation
-
-### OpenAPI/Swagger
-```
-http://localhost:8000/docs
-```
-
-### Authentication
-All protected endpoints require Bearer token in Authorization header:
-```
-Authorization: Bearer <access_token>
-```
-
-Refresh token is sent in HttpOnly cookie for security.
-
-### Error Responses
-Standard error format:
-```json
-{
-  "error": "VALIDATION_ERROR",
-  "detalle": "Product name must be 3-100 characters",
-  "codigo": "ERR_PRODUCT_NAME_INVALID"
-}
-```
-
-## Security Features
-
-- ✓ Password hashing with bcrypt
-- ✓ JWT tokens with expiration
-- ✓ HttpOnly cookies for refresh tokens
-- ✓ CORS configuration
-- ✓ Rate limiting on auth endpoints
-- ✓ Input validation with Pydantic
-- ✓ SQL injection prevention (SQLAlchemy ORM)
-- ✓ Email verification for registration
-- ✓ Login attempt lockout (5 attempts/15 min)
-
-## Configuration
-
-See `.env.example` files in `backend/api` and `backend/worker` for all configuration options.
-
-Key variables:
-- `DB_SERVER`, `DB_PORT`, `DB_NAME`, `DB_USER`, `DB_PASSWORD` - SQL Server
-- `RABBITMQ_HOST`, `RABBITMQ_PORT`, `RABBITMQ_USER`, `RABBITMQ_PASSWORD` - RabbitMQ
-- `SECRET_KEY`, `ALGORITHM` - JWT configuration
-- `SMTP_SERVER`, `SMTP_USER`, `SMTP_PASSWORD` - Email configuration
-- `CORS_ORIGINS` - Allowed frontend origins
-
-## Development Workflow
-
-1. **Create new route** in `backend/api/app/routers/`
-2. **Implement business logic** in `backend/api/app/services/`
-3. **Define schemas** in `backend/api/app/schemas.py`
-4. **Publish RabbitMQ message** for async processing
-5. **Implement consumer** in `backend/worker/src/services/`
-6. **Test endpoints** using Swagger at `/docs`
-
-## Testing
-
-```bash
-# Backend
-cd backend/api
-pytest tests/
-
-# Worker
-cd backend/worker
-npm run test
-```
-
-## Deployment
-
-### Docker Compose (Development)
 ```bash
 docker-compose up -d
-```
-
-### Production Considerations
-1. Set `DEBUG=False` in production
-2. Use strong `SECRET_KEY` values
-3. Configure SMTP credentials for real email service
-4. Use managed database services (Azure SQL, AWS RDS)
-5. Use managed message queues (Azure Service Bus, AWS SQS)
-6. Enable HTTPS/TLS
-7. Set up proper logging and monitoring
-
-## Troubleshooting
-
-### Database Connection Error
-- Verify SQL Server is running
-- Check connection string in `.env`
-- Run migrations: `python scripts/init_db.py`
-
-### RabbitMQ Connection Error
-- Verify RabbitMQ service is running
-- Check credentials in `.env`
-- Default: guest/guest on localhost:5672
-
-### Email Not Sending
-- Verify SMTP credentials in `.env`
-- Check Gmail: Enable "Less secure apps" or use app password
-- Check worker logs for error messages
-
-## License
-
-MIT License
-
-## Support
-
-For issues or questions, please refer to the HU instruction files in `/HU` directory.
