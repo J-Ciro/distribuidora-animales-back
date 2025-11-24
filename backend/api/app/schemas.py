@@ -334,8 +334,52 @@ class UsuarioDetailResponse(BaseModel):
         from_attributes = True
 
 
-# Error Response
-class ErrorResponse(BaseModel):
+# Detailed error response (internal/legacy)
+class ErrorDetailResponse(BaseModel):
     error: str
     detalle: Optional[str] = None
     codigo: str
+
+
+# --- Responses for HU_MANAGE_USERS ---
+class UsuarioListItem(BaseModel):
+    id: int
+    nombre_completo: str
+    cedula: Optional[str]
+    email: str
+    direccion_envio: Optional[str]
+    fecha_registro: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class MetaPage(BaseModel):
+    page: int
+    pageSize: int
+    total: int
+
+
+class UsuariosListResponse(BaseModel):
+    status: str = "success"
+    data: List[UsuarioListItem] = []
+    meta: MetaPage
+
+
+class UsuarioDetailWrapper(BaseModel):
+    status: str = "success"
+    data: UsuarioDetailResponse
+
+
+class PedidoSummaryItem(BaseModel):
+    id: int
+    fecha: datetime
+    total: float
+    estado: str
+
+
+class PedidosListResponse(BaseModel):
+    status: str = "success"
+    data: List[PedidoResponse] = []
+    meta: MetaPage
+

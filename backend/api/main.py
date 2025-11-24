@@ -108,35 +108,20 @@ setup_error_handlers(app)
 
 
 # Health check endpoint
-@app.get("/health", tags=["Health"])
-async def health_check():
-    """Health check endpoint"""
-    return {
-        "status": "success",
-        "message": "API is healthy",
-        "version": "1.0.0"
-    }
 
 
-@app.get("/", tags=["Root"])
-async def root():
-    """Root endpoint"""
-    return {
-        "status": "success",
-        "message": "Bienvenido a Distribuidora Perros y Gatos API",
-        "docs": "/docs"
-    }
+
 
 
 # Importar y incluir routers
-app.include_router(auth_router, prefix="/api/auth", tags=["Authentication"])
-app.include_router(categories_router, tags=["Categories"])
-app.include_router(products_router, tags=["Products"])
-app.include_router(inventory_router, tags=["Inventory"])
-app.include_router(carousel_router, tags=["Carousel"])
-app.include_router(orders_router, tags=["Orders"])
-app.include_router(admin_users_router, tags=["Admin Users"])
-app.include_router(home_products_router, tags=["Home Products"])
+app.include_router(auth_router, prefix="/api/auth", tags=["authentication"])
+app.include_router(categories_router, tags=["categories"])
+app.include_router(products_router, tags=["products"])
+app.include_router(inventory_router, tags=["inventory"])
+app.include_router(carousel_router, tags=["carousel"])
+app.include_router(orders_router, tags=["orders"])
+app.include_router(admin_users_router, tags=["admin-users"])
+app.include_router(home_products_router, tags=["home-products"])
 
 # Public carousel router (frontend)
 from app.routers.carousel import public_router as carousel_public_router

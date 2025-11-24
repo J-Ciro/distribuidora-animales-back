@@ -180,4 +180,46 @@ Notas:
 
 ---
 
+## 🧪 Pruebas y verificación (pasos rápidos)
+
+1. Levantar la API en modo desarrollo (desde `backend/api`):
+
+```powershell
+python -m uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+```
+
+2. Acceder a Swagger UI: `http://localhost:8000/docs` y verificar que las rutas:
+  - `GET /api/admin/usuarios`
+  - `GET /api/admin/usuarios/{id}`
+  - `GET /api/admin/usuarios/{id}/pedidos`
+  aparecen y tienen descripciones.
+
+3. Ejemplos curl / PowerShell (requieren token de admin válido):
+
+```bash
+# Obtener lista paginada (ejemplo)
+curl -H "Authorization: Bearer <ADMIN_TOKEN>" "http://localhost:8000/api/admin/usuarios?page=1&pageSize=20"
+
+# Obtener perfil detallado
+curl -H "Authorization: Bearer <ADMIN_TOKEN>" "http://localhost:8000/api/admin/usuarios/1"
+
+# Obtener pedidos del usuario
+curl -H "Authorization: Bearer <ADMIN_TOKEN>" "http://localhost:8000/api/admin/usuarios/1/pedidos?page=1&pageSize=10"
+```
+
+PowerShell (alternativa):
+```powershell
+Invoke-RestMethod -Uri "http://localhost:8000/api/admin/usuarios?page=1&pageSize=20" -Headers @{"Authorization" = "Bearer <ADMIN_TOKEN>"} -Method GET
+```
+
+4. Mensajes exactos a verificar en UI:
+  - Usuario no encontrado: `{"status": "error", "message": "Usuario no encontrado."}` (HTTP 404)
+  - Respuesta de éxito: `{"status": "success", "data": ...}`
+
+5. Notas para Swagger/OpenAPI:
+  - FastAPI mostrará automáticamente las rutas; si desea que la respuesta esté tipada en Swagger exactamente con la envoltura `status/data/meta`, actualizar los `response_model` a los nuevos modelos en `app.schemas` y documentar los ejemplos.
+
+
+---
+
 Archivo: `HU/INSTRUCTIONS_HU_MANAGE_USERS.md`
