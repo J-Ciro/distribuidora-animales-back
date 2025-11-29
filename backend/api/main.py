@@ -21,6 +21,7 @@ from app.routers import (
     inventory_router,
     carousel_router,
     orders_router,
+    orders_public_router,
     admin_users_router,
     home_products_router
 )
@@ -120,10 +121,11 @@ app.include_router(products_router, tags=["products"])
 app.include_router(inventory_router, tags=["inventory"])
 app.include_router(carousel_router, tags=["carousel"])
 app.include_router(orders_router, tags=["orders"])
+app.include_router(orders_public_router, tags=["pedidos-public"])
 app.include_router(admin_users_router, tags=["admin-users"])
 app.include_router(home_products_router, tags=["home-products"])
 
-# Public carousel router (frontend)
+# Public routers (frontend)
 from app.routers.carousel import public_router as carousel_public_router
 app.include_router(carousel_public_router)
 

@@ -255,6 +255,7 @@ class CartResponse(BaseModel):
 class PedidoCreate(BaseModel):
     direccion_entrega: str = Field(..., min_length=10)
     telefono_contacto: str = Field(..., pattern=r"^\d{7,15}$")
+    metodo_pago: Optional[str] = Field('Efectivo', pattern=r"^(Tarjeta|Efectivo|Daviplata|Nequi|Addi|Sistecredito)$")
     nota_especial: Optional[str] = Field(None, max_length=500)
     usuario_id: int
     items: List[dict] = []
@@ -280,6 +281,9 @@ class PedidoResponse(BaseModel):
     usuario_id: int
     estado: str
     total: float
+    metodo_pago: Optional[str] = 'Efectivo'
+    direccion_entrega: str
+    telefono_contacto: str
     fecha_creacion: datetime
     items: List[PedidoItemResponse] = []
     

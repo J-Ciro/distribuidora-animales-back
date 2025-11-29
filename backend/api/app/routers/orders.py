@@ -42,6 +42,9 @@ def _pedido_to_response(db, pedido: models.Pedido):
         "usuario_id": pedido.usuario_id,
         "estado": pedido.estado,
         "total": float(pedido.total),
+        "metodo_pago": pedido.metodo_pago or 'Efectivo',
+        "direccion_entrega": pedido.direccion_entrega,
+        "telefono_contacto": pedido.telefono_contacto,
         "fecha_creacion": pedido.fecha_creacion,
         "items": items_resp,
     }
@@ -86,6 +89,7 @@ async def create_order(payload: PedidoCreate, db: Session = Depends(get_db)):
         estado='Pendiente',
         direccion_entrega=payload.direccion_entrega,
         telefono_contacto=payload.telefono_contacto,
+        metodo_pago=payload.metodo_pago or 'Efectivo',
         nota_especial=payload.nota_especial,
     )
     db.add(pedido)
@@ -292,4 +296,71 @@ async def get_user_orders(
         .all()
     )
     return [_pedido_to_response(db, p) for p in pedidos]
-    raise HTTPException(status_code=status.HTTP_501_NOT_IMPLEMENTED, detail="Not implemented")
+
+
+# ==================== PUBLIC ROUTER FOR CUSTOMER ORDERS ====================
+public_router = APIRouter(
+    prefix="/api/pedidos",
+    tags=["pedidos-public"]
+)
+
+@public_router.post("/", response_model=PedidoResponse, status_code=status.HTTP_201_CREATED)
+async def create_customer_order(payload: PedidoCreate, db: Session = Depends(get_db)):
+    """
+    Create a new order (public endpoint for customers)
+    """
+    # Validate usuario exists
+    usuario = db.query(models.Usuario).filter(models.Usuario.id == payload.usuario_id).first()
+    if not usuario:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Usuario no existe")
+
+    pedido = models.Pedido(
+        usuario_id=payload.usuario_id,
+        estado='Pendiente',
+        direccion_entrega=payload.direccion_entrega,
+        telefono_contacto=payload.telefono_contacto,
+        metodo_pago=payload.metodo_pago or 'Efectivo',
+        nota_especial=payload.nota_especial,
+    )
+    db.add(pedido)
+    db.flush()
+
+    total = 0
+    items_payload = getattr(payload, 'items', []) or []
+    for it in items_payload:
+        producto_id = int(it.get('producto_id'))
+        cantidad = int(it.get('cantidad'))
+        precio = float(it.get('precio_unitario')) if it.get('precio_unitario') is not None else 0.0
+        total += cantidad * precio
+        pi = models.PedidoItem(
+            pedido_id=pedido.id,
+            producto_id=producto_id,
+            cantidad=cantidad,
+            precio_unitario=precio,
+        )
+        db.add(pi)
+
+    pedido.total = total
+    db.add(pedido)
+    db.commit()
+    db.refresh(pedido)
+
+    logger.info(f"Order created: pedido_id={pedido.id}, usuario_id={payload.usuario_id}, total={total}")
+    return _pedido_to_response(db, pedido)
+
+
+@public_router.get("/", response_model=List[PedidoResponse])
+async def get_customer_orders(
+    skip: int = Query(0, ge=0),
+    limit: int = Query(20, ge=1, le=100),
+    db: Session = Depends(get_db)
+):
+    """
+    Get orders for current user (requires authentication)
+    """
+    # TODO: Get current user from JWT token
+    # For now, return empty list or require usuario_id as query param
+    raise HTTPException(
+        status_code=status.HTTP_501_NOT_IMPLEMENTED, 
+        detail="Endpoint requires authentication implementation"
+    )

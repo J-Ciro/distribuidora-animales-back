@@ -119,6 +119,7 @@ class Pedido(Base):
     total = Column(Numeric(10, 2), nullable=False, default=0)
     direccion_entrega = Column(String(500), nullable=False)
     telefono_contacto = Column(String(20), nullable=False)
+    metodo_pago = Column(String(50), nullable=True, default='Efectivo')
     nota_especial = Column(String(500), nullable=True)
     fecha_creacion = Column(DateTime(timezone=True), server_default=func.now())
 
