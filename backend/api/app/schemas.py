@@ -258,6 +258,9 @@ class PedidoCreate(BaseModel):
     nota_especial: Optional[str] = Field(None, max_length=500)
     usuario_id: int
     items: List[dict] = []
+    subtotal: Optional[float] = Field(None, ge=0)
+    costo_envio: Optional[float] = Field(None, ge=0)
+    metodo_pago: Optional[str] = Field(None, max_length=50)
 
 
 class PedidoEstadoUpdate(BaseModel):
