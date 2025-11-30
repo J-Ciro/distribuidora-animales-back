@@ -254,6 +254,9 @@ class CartResponse(BaseModel):
 # Order Schemas
 class PedidoCreate(BaseModel):
     direccion_entrega: str = Field(..., min_length=10)
+    municipio: Optional[str] = Field(None, max_length=100)
+    departamento: Optional[str] = Field(None, max_length=100)
+    pais: Optional[str] = Field('Colombia', max_length=100)
     telefono_contacto: str = Field(..., pattern=r"^\d{7,15}$")
     metodo_pago: Optional[str] = Field('Efectivo', pattern=r"^(Tarjeta|Efectivo|Daviplata|Nequi|Addi|Sistecredito)$")
     nota_especial: Optional[str] = Field(None, max_length=500)
@@ -279,10 +282,14 @@ class PedidoItemResponse(BaseModel):
 class PedidoResponse(BaseModel):
     id: int
     usuario_id: int
+    clienteNombre: Optional[str] = None
     estado: str
     total: float
     metodo_pago: Optional[str] = 'Efectivo'
     direccion_entrega: str
+    municipio: Optional[str] = None
+    departamento: Optional[str] = None
+    pais: Optional[str] = 'Colombia'
     telefono_contacto: str
     fecha_creacion: datetime
     items: List[PedidoItemResponse] = []
@@ -328,12 +335,17 @@ class UsuarioPublicResponse(BaseModel):
 
 class UsuarioDetailResponse(BaseModel):
     id: int
-    nombre_completo: str
+    nombreCompleto: str
     email: str
     cedula: str
-    fecha_registro: datetime
-    ultimo_login: Optional[datetime]
+    telefono: Optional[str] = None
+    direccionEnvio: Optional[str] = None
+    preferenciaMascotas: Optional[str] = None
+    fechaRegistro: datetime
+    ultimoLogin: Optional[datetime] = None
     rol: str
+    pedidosResumen: Optional[dict] = None
+    
     class Config:
         from_attributes = True
 
@@ -348,11 +360,11 @@ class ErrorDetailResponse(BaseModel):
 # --- Responses for HU_MANAGE_USERS ---
 class UsuarioListItem(BaseModel):
     id: int
-    nombre_completo: str
+    nombreCompleto: str
     cedula: Optional[str]
     email: str
-    direccion_envio: Optional[str]
-    fecha_registro: datetime
+    direccionEnvio: Optional[str]
+    fechaRegistro: datetime
 
     class Config:
         from_attributes = True

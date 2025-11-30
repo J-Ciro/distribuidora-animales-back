@@ -93,11 +93,11 @@ async def list_users(
         for u in users:
             data.append({
                 "id": u.id,
-                "nombre_completo": u.nombre_completo,
+                "nombreCompleto": u.nombre_completo,
                 "cedula": u.cedula,
                 "email": u.email,
-                "direccion_envio": u.direccion_envio,
-                "fecha_registro": u.fecha_registro,
+                "direccionEnvio": u.direccion_envio,
+                "fechaRegistro": u.fecha_registro,
             })
 
         return {"status": "success", "data": data, "meta": {"page": page, "pageSize": pageSize, "total": total}}
@@ -126,14 +126,14 @@ async def get_user(usuario_id: int, db: Session = Depends(get_db), _admin: Usuar
 
         result = {
             "id": usuario.id,
-            "nombre_completo": usuario.nombre_completo,
+            "nombreCompleto": usuario.nombre_completo,
             "cedula": usuario.cedula,
             "email": usuario.email,
             "telefono": usuario.telefono,
-            "direccion_envio": usuario.direccion_envio,
-            "preferencia_mascotas": usuario.preferencia_mascotas,
-            "fecha_registro": usuario.fecha_registro,
-            "ultimo_login": usuario.ultimo_login,
+            "direccionEnvio": usuario.direccion_envio,
+            "preferenciaMascotas": usuario.preferencia_mascotas,
+            "fechaRegistro": usuario.fecha_registro,
+            "ultimoLogin": usuario.ultimo_login,
             "rol": "admin" if usuario.es_admin else "cliente",
             "pedidosResumen": {"totalPedidos": total_pedidos, "ultimoPedido": ultimo_pedido}
         }
@@ -186,8 +186,15 @@ async def get_user_orders(
             data.append({
                 "id": p.id,
                 "usuario_id": p.usuario_id,
+                "clienteNombre": usuario.nombre_completo,
                 "estado": p.estado,
                 "total": float(p.total),
+                "metodo_pago": p.metodo_pago or 'Efectivo',
+                "direccion_entrega": p.direccion_entrega or '',
+                "municipio": p.municipio,
+                "departamento": p.departamento,
+                "pais": p.pais or 'Colombia',
+                "telefono_contacto": p.telefono_contacto or '',
                 "fecha_creacion": p.fecha_creacion,
                 "items": items_list
             })

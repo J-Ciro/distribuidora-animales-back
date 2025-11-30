@@ -5,7 +5,7 @@ Handles HU_MANAGE_ORDERS
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.orm import Session
 from typing import List, Optional
-from sqlalchemy import desc
+from sqlalchemy import desc, text
 from app.schemas import (
     PedidoCreate,
     PedidoResponse,
@@ -36,14 +36,22 @@ def _pedido_to_response(db, pedido: models.Pedido):
         }
         for item in items
     ]
+    
+    # Get user information
+    usuario = db.query(models.Usuario).filter(models.Usuario.id == pedido.usuario_id).first()
+    cliente_nombre = usuario.nombre_completo if usuario else f"Cliente #{pedido.usuario_id}"
 
     return {
         "id": pedido.id,
         "usuario_id": pedido.usuario_id,
+        "clienteNombre": cliente_nombre,
         "estado": pedido.estado,
         "total": float(pedido.total),
         "metodo_pago": pedido.metodo_pago or 'Efectivo',
         "direccion_entrega": pedido.direccion_entrega,
+        "municipio": pedido.municipio,
+        "departamento": pedido.departamento,
+        "pais": pedido.pais or 'Colombia',
         "telefono_contacto": pedido.telefono_contacto,
         "fecha_creacion": pedido.fecha_creacion,
         "items": items_resp,
@@ -88,6 +96,9 @@ async def create_order(payload: PedidoCreate, db: Session = Depends(get_db)):
         usuario_id=payload.usuario_id,
         estado='Pendiente',
         direccion_entrega=payload.direccion_entrega,
+        municipio=payload.municipio,
+        departamento=payload.departamento,
+        pais=payload.pais or 'Colombia',
         telefono_contacto=payload.telefono_contacto,
         metodo_pago=payload.metodo_pago or 'Efectivo',
         nota_especial=payload.nota_especial,
@@ -101,6 +112,38 @@ async def create_order(payload: PedidoCreate, db: Session = Depends(get_db)):
         producto_id = int(it.get('producto_id'))
         cantidad = int(it.get('cantidad'))
         precio = float(it.get('precio_unitario')) if it.get('precio_unitario') is not None else 0.0
+        
+        # Verificar y descontar stock del producto usando SQL directo
+        query_producto = text("""
+            SELECT id, nombre, cantidad_disponible 
+            FROM Productos 
+            WHERE id = :producto_id
+        """)
+        result = db.execute(query_producto, {"producto_id": producto_id})
+        producto = result.fetchone()
+        
+        if not producto:
+            db.rollback()
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST, 
+                detail=f"Producto con ID {producto_id} no encontrado"
+            )
+        
+        if producto.cantidad_disponible < cantidad:
+            db.rollback()
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Stock insuficiente para {producto.nombre}. Disponible: {producto.cantidad_disponible}, Solicitado: {cantidad}"
+            )
+        
+        # Descontar el stock
+        update_stock = text("""
+            UPDATE Productos 
+            SET cantidad_disponible = cantidad_disponible - :cantidad 
+            WHERE id = :producto_id
+        """)
+        db.execute(update_stock, {"cantidad": cantidad, "producto_id": producto_id})
+        
         total += cantidad * precio
         pi = models.PedidoItem(
             pedido_id=pedido.id,
@@ -318,6 +361,9 @@ async def create_customer_order(payload: PedidoCreate, db: Session = Depends(get
         usuario_id=payload.usuario_id,
         estado='Pendiente',
         direccion_entrega=payload.direccion_entrega,
+        municipio=payload.municipio,
+        departamento=payload.departamento,
+        pais=payload.pais or 'Colombia',
         telefono_contacto=payload.telefono_contacto,
         metodo_pago=payload.metodo_pago or 'Efectivo',
         nota_especial=payload.nota_especial,
@@ -331,6 +377,38 @@ async def create_customer_order(payload: PedidoCreate, db: Session = Depends(get
         producto_id = int(it.get('producto_id'))
         cantidad = int(it.get('cantidad'))
         precio = float(it.get('precio_unitario')) if it.get('precio_unitario') is not None else 0.0
+        
+        # Verificar y descontar stock del producto usando SQL directo
+        query_producto = text("""
+            SELECT id, nombre, cantidad_disponible 
+            FROM Productos 
+            WHERE id = :producto_id
+        """)
+        result = db.execute(query_producto, {"producto_id": producto_id})
+        producto = result.fetchone()
+        
+        if not producto:
+            db.rollback()
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST, 
+                detail=f"Producto con ID {producto_id} no encontrado"
+            )
+        
+        if producto.cantidad_disponible < cantidad:
+            db.rollback()
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Stock insuficiente para {producto.nombre}. Disponible: {producto.cantidad_disponible}, Solicitado: {cantidad}"
+            )
+        
+        # Descontar el stock
+        update_stock = text("""
+            UPDATE Productos 
+            SET cantidad_disponible = cantidad_disponible - :cantidad 
+            WHERE id = :producto_id
+        """)
+        db.execute(update_stock, {"cantidad": cantidad, "producto_id": producto_id})
+        
         total += cantidad * precio
         pi = models.PedidoItem(
             pedido_id=pedido.id,
