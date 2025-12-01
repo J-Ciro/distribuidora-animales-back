@@ -27,6 +27,7 @@ from app.database import get_db
 from app.models import Usuario, VerificationCode, RefreshToken
 from app.utils import security_utils
 from app.utils.rabbitmq import rabbitmq_producer
+from app.utils.email_service import email_service
 from app.config import settings
 
 logger = logging.getLogger(__name__)
@@ -93,7 +94,7 @@ async def register(request: RegisterRequest, db: Session = Depends(get_db)):
         # 4. Hash password using bcrypt
         password_hash = security_utils.hash_password(request.password)
         
-        # 5. Create usuario entry (is_active=True) - DESARROLLO: Sin verificación de email
+        # 5. Create usuario entry (is_active=False) - Requiere verificación de email
         nuevo_usuario = Usuario(
             email=request.email,
             password_hash=password_hash,
@@ -102,7 +103,7 @@ async def register(request: RegisterRequest, db: Session = Depends(get_db)):
             telefono=request.telefono,
             direccion_envio=request.direccion_envio,
             preferencia_mascotas=request.preferencia_mascotas,
-            is_active=True
+            is_active=False  # Usuario inactivo hasta verificar email
         )
         db.add(nuevo_usuario)
         try:
@@ -120,75 +121,49 @@ async def register(request: RegisterRequest, db: Session = Depends(get_db)):
                 )
             raise
         
-        # DESARROLLO: Verificación de email desactivada
         # 6. Generate verification code (6 digits)
-        # verification_code = security_utils.generate_verification_code()
-        # code_hash = security_utils.hash_verification_code(verification_code)
-        # 
-        # # 7. Create/update VerificationCodes with expires_at = now + 10 minutes
-        # expires_at = datetime.now(timezone.utc) + timedelta(minutes=settings.VERIFICATION_CODE_EXPIRE_MINUTES)
-        # 
-        # # Check if there's an existing verification code for this user
-        # existing_code = db.query(VerificationCode).filter(
-        #     and_(
-        #         VerificationCode.usuario_id == nuevo_usuario.id,
-        #         VerificationCode.is_used == False,
-        #         VerificationCode.expires_at > datetime.now(timezone.utc)
-        #     )
-        # ).first()
-        # 
-        # if existing_code:
-        #     # Update existing code
-        #     existing_code.code_hash = code_hash
-        #     existing_code.expires_at = expires_at
-        #     existing_code.sent_count += 1
-        #     existing_code.attempts = 0
-        #     verification_record = existing_code
-        # else:
-        #     # Create new verification code
-        #     verification_record = VerificationCode(
-        #         usuario_id=nuevo_usuario.id,
-        #         code_hash=code_hash,
-        #         expires_at=expires_at,
-        #         sent_count=1,
-        #         attempts=0,
-        #         is_used=False
-        #     )
-        #     db.add(verification_record)
-        # 
-        # db.flush()
-        # 
-        # # 8. Publish message to RabbitMQ queue expected by the worker: email.notifications
-        # request_id = str(uuid.uuid4())
-        # subject = "Verifica tu correo electrónico - Distribuidora Perros y Gatos"
-        # message = {
-        #     "requestId": request_id,
-        #     "to": request.email,
-        #     "subject": subject,
-        #     "template": "verification",
-        #     "context": {
-        #         "name": request.nombre,
-        #         "code": verification_code,
-        #         "year": datetime.now().year,
-        #         "subject": subject
-        #     },
-        #     "timestamp": datetime.now(timezone.utc).isoformat()
-        # }
-        #
-        # try:
-        #     rabbitmq_producer.publish("email.notifications", message, durable=True)
-        #     logger.info(f"Published verification email message for user {nuevo_usuario.id}, requestId: {request_id}")
-        # except Exception as e:
-        #     logger.error(f"Failed to publish to RabbitMQ (email.notifications): {str(e)}")
-        #     # Don't fail the registration if RabbitMQ is down; registration still succeeds
+        verification_code = security_utils.generate_verification_code()
+        code_hash = security_utils.hash_verification_code(verification_code)
         
-        # 9. Commit transaction
+        # 7. Create VerificationCode with expires_at = now + 10 minutes
+        expires_at = datetime.now(timezone.utc) + timedelta(minutes=settings.VERIFICATION_CODE_EXPIRE_MINUTES)
+        
+        # Invalidar códigos anteriores no usados
+        db.query(VerificationCode).filter(
+            and_(
+                VerificationCode.usuario_id == nuevo_usuario.id,
+                VerificationCode.is_used == False
+            )
+        ).update({"is_used": True})
+        
+        # Create new verification code
+        verification_record = VerificationCode(
+            usuario_id=nuevo_usuario.id,
+            code_hash=code_hash,
+            expires_at=expires_at,
+            sent_count=1,
+            attempts=0,
+            is_used=False
+        )
+        db.add(verification_record)
+        
+        # 8. Commit transaction
         db.commit()
+        db.refresh(nuevo_usuario)
         
-        # 10. Return success response - DESARROLLO: Usuario activado directamente
+        # 9. Send verification email
+        try:
+            email_sent = email_service.send_verification_code(request.email, verification_code)
+            if not email_sent:
+                logger.warning(f"Failed to send verification email to {request.email}")
+        except Exception as e:
+            logger.error(f"Error sending verification email: {str(e)}")
+            # No fallar el registro si el email no se envía
+        
+        # 10. Return success response
         return {
             "status": "success",
-            "message": "¡Registro exitoso! Ya puedes iniciar sesión con tus credenciales."
+            "message": "¡Registro exitoso! Revisa tu correo para verificar tu cuenta. El código expira en 10 minutos."
         }
         
     except HTTPException:
@@ -393,33 +368,17 @@ async def resend_code(request: ResendCodeRequest, db: Session = Depends(get_db))
             )
             db.add(verification_record)
         
-        db.flush()
-        
-        # 7. Publish message to RabbitMQ queue expected by the worker: email.notifications
-        request_id = str(uuid.uuid4())
-        subject = "Verifica tu correo electrónico - Distribuidora Perros y Gatos"
-        message = {
-            "requestId": request_id,
-            "to": usuario.email,
-            "subject": subject,
-            "template": "verification",
-            "context": {
-                "name": usuario.nombre_completo,
-                "code": verification_code,
-                "year": datetime.now().year,
-                "subject": subject
-            },
-            "timestamp": datetime.now(timezone.utc).isoformat()
-        }
-
-        try:
-            rabbitmq_producer.publish("email.notifications", message, durable=True)
-            logger.info(f"Published resend verification email for user {usuario.id}, requestId: {request_id}")
-        except Exception as e:
-            logger.error(f"Failed to publish to RabbitMQ (email.notifications): {str(e)}")
-            # Don't fail the resend if RabbitMQ is down
-        
         db.commit()
+        db.refresh(verification_record)
+        
+        # 7. Send verification email
+        try:
+            email_sent = email_service.send_verification_code(usuario.email, verification_code)
+            if not email_sent:
+                logger.warning(f"Failed to send resend verification email to {usuario.email}")
+        except Exception as e:
+            logger.error(f"Error sending resend verification email: {str(e)}")
+            # No fallar el reenvío si el email no se envía
         
         return {
             "status": "success",
@@ -479,12 +438,12 @@ async def login(request: LoginRequest, response: Response, db: Session = Depends
             db.commit()
             raise generic_error
 
-        # 5. Check if account is active - DESARROLLO: Desactivada validación
-        # if not usuario.is_active:
-        #     raise HTTPException(
-        #         status_code=status.HTTP_403_FORBIDDEN,
-        #         detail={"status": "error", "message": "Cuenta no verificada. Revisa tu correo."}
-        #     )
+        # 5. Check if account is active - Usuario debe verificar su email
+        if not usuario.is_active:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail={"status": "error", "message": "Cuenta no verificada. Revisa tu correo para obtener el código de verificación."}
+            )
 
         # 6. On successful login, reset failed attempts and update last login time
         usuario.failed_login_attempts = 0
