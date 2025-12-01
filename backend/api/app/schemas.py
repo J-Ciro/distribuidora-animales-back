@@ -98,10 +98,10 @@ class SubcategoriaUpdateRequest(BaseModel):
 # Response schemas
 class SubcategoriaResponse(BaseModel):
     id: int
-    categoria_id: int
+    categoria_id: Optional[int] = None
     nombre: str
-    created_at: datetime
-    updated_at: datetime
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
     
     class Config:
         from_attributes = True
@@ -110,8 +110,8 @@ class SubcategoriaResponse(BaseModel):
 class CategoriaResponse(BaseModel):
     id: int
     nombre: str
-    created_at: datetime
-    updated_at: datetime
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
     subcategorias: List[SubcategoriaResponse] = []
     
     class Config:

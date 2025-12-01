@@ -31,7 +31,7 @@ def wait_for_db(engine, max_retries=30, retry_interval=5):
 
 def create_database_if_not_exists(db_server, db_user, db_password, db_name):
     """Crea la base de datos si no existe"""
-    master_connection_string = f"mssql+pyodbc://{db_user}:{db_password}@{db_server}/master?driver=ODBC+Driver+18+for+SQL+Server&TrustServerCertificate=yes&Encrypt=no"
+    master_connection_string = f"mssql+pyodbc://{db_user}:{db_password}@{db_server}/master?driver=ODBC+Driver+17+for+SQL+Server&TrustServerCertificate=yes&Encrypt=no"
     
     try:
         engine = create_engine(master_connection_string, echo=False)
@@ -110,7 +110,7 @@ def initialize_database():
     time.sleep(2)
     
     # Conectar a la base de datos específica
-    connection_string = f"mssql+pyodbc://{db_user}:{db_password}@{db_server}/{db_name}?driver=ODBC+Driver+18+for+SQL+Server&TrustServerCertificate=yes&Encrypt=no"
+    connection_string = f"mssql+pyodbc://{db_user}:{db_password}@{db_server}/{db_name}?driver=ODBC+Driver+17+for+SQL+Server&TrustServerCertificate=yes&Encrypt=no"
     
     try:
         engine = create_engine(connection_string, echo=False)
