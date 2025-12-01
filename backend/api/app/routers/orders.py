@@ -14,6 +14,7 @@ from app.schemas import (
 )
 from app.database import get_db
 from app.utils.rabbitmq import RabbitMQProducer
+from app.routers.auth import get_current_user
 import app.models as models
 import logging
 
@@ -27,15 +28,28 @@ router = APIRouter(
 
 def _pedido_to_response(db, pedido: models.Pedido):
     items = db.query(models.PedidoItem).filter(models.PedidoItem.pedido_id == pedido.id).all()
-    items_resp = [
-        {
+    items_resp = []
+    
+    for item in items:
+        # Get product details
+        producto = db.execute(
+            text("SELECT id, nombre FROM Productos WHERE id = :producto_id"),
+            {"producto_id": item.producto_id}
+        ).fetchone()
+        
+        item_data = {
             "id": item.id,
             "producto_id": item.producto_id,
             "cantidad": item.cantidad,
             "precio_unitario": float(item.precio_unitario),
         }
-        for item in items
-    ]
+        
+        # Add product details if found
+        if producto:
+            item_data["producto_nombre"] = producto.nombre
+            item_data["producto_imagen"] = None  # Column doesn't exist in DB
+        
+        items_resp.append(item_data)
     
     # Get user information
     usuario = db.query(models.Usuario).filter(models.Usuario.id == pedido.usuario_id).first()
@@ -427,18 +441,29 @@ async def create_customer_order(payload: PedidoCreate, db: Session = Depends(get
     return _pedido_to_response(db, pedido)
 
 
-@public_router.get("/", response_model=List[PedidoResponse])
-async def get_customer_orders(
+@public_router.get("/my-orders", response_model=List[PedidoResponse])
+async def get_my_orders(
     skip: int = Query(0, ge=0),
     limit: int = Query(20, ge=1, le=100),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user)
 ):
     """
-    Get orders for current user (requires authentication)
+    Get orders for authenticated user
+    
+    Returns:
+    - All orders for the current user
+    - Sorted by fecha_creacion DESC (newest first)
+    - Includes order items and product details
+    - Pagination support
     """
-    # TODO: Get current user from JWT token
-    # For now, return empty list or require usuario_id as query param
-    raise HTTPException(
-        status_code=status.HTTP_501_NOT_IMPLEMENTED, 
-        detail="Endpoint requires authentication implementation"
+    pedidos = (
+        db.query(models.Pedido)
+        .filter(models.Pedido.usuario_id == current_user.id)
+        .order_by(desc(models.Pedido.fecha_creacion))
+        .offset(skip)
+        .limit(limit)
+        .all()
     )
+    
+    return [_pedido_to_response(db, p) for p in pedidos]
