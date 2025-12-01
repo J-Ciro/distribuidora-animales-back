@@ -35,11 +35,22 @@ async def lifespan(app: FastAPI):
     """
     # Startup
     print("Starting Distribuidora Perros y Gatos Backend API")
+    
+    # Inicializar schema de base de datos si es necesario
+    try:
+        from app.utils.db_init import initialize_database
+        print("Inicializando base de datos...")
+        initialize_database()
+    except Exception as e:
+        print(f"Warning: Could not initialize database schema: {str(e)}")
+        print("The database may need manual initialization")
+    
+    # Inicializar conexión de SQLAlchemy
     try:
         init_db()
-        print("Database initialized successfully")
+        print("Database connection pool initialized successfully")
     except Exception as e:
-        print(f"Warning: Could not initialize database: {str(e)}")
+        print(f"Warning: Could not initialize database connection: {str(e)}")
         print("Application will continue without database connection")
         # Don't raise - allow app to start for development
     

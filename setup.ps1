@@ -97,6 +97,10 @@ if ($configureEmail -eq "s" -or $configureEmail -eq "S") {
 Write-Host "✓ Deteniendo contenedores existentes (si hay)..." -ForegroundColor Yellow
 docker-compose down 2>$null | Out-Null
 
+# Limpiar contenedor db-migrator si existe (puede estar en estado fallido)
+Write-Host "✓ Limpiando contenedores antiguos..." -ForegroundColor Yellow
+docker rm -f distribuidora-db-migrator 2>$null | Out-Null
+
 Write-Host ""
 
 # Iniciar contenedores
@@ -105,6 +109,7 @@ Write-Host "  INICIANDO CONTENEDORES DOCKER" -ForegroundColor Cyan
 Write-Host "========================================" -ForegroundColor Cyan
 Write-Host ""
 Write-Host "Esto puede tomar unos minutos la primera vez..." -ForegroundColor Yellow
+Write-Host "La base de datos se inicializará automáticamente al iniciar el API" -ForegroundColor Yellow
 Write-Host ""
 
 docker-compose up -d
