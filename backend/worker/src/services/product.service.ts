@@ -7,7 +7,7 @@ import logger from '../utils/logger';
 const UPLOAD_DIR = process.env.UPLOAD_DIR || path.join(__dirname, '../../uploads');
 
 export const processProductCreate = async (payload: any) => {
-  const { nombre, descripcion, precio, peso_gramos, categoria_id, subcategoria_id, cantidad_disponible, imagen_filename, imagen_b64 } = payload;
+  const { nombre, descripcion, precio, peso_gramos, categoria_id, subcategoria_id, cantidad_disponible, imagen_filename, imagen_b64, imagen_url } = payload;
 
   const trx = pool;
   try {
@@ -16,10 +16,10 @@ export const processProductCreate = async (payload: any) => {
       await trx.connect();
       logger.info('DB pool connected from product.service');
     }
-    // Check name uniqueness (case-insensitive)
+    // Check name uniqueness (case-insensitive) - only among active products
     const nameCheck = await trx.request()
       .input('nombre', mssql.NVarChar(100), nombre)
-      .query('SELECT TOP 1 id FROM Productos WHERE LOWER(nombre) = LOWER(@nombre)');
+      .query('SELECT TOP 1 id FROM Productos WHERE LOWER(nombre) = LOWER(@nombre) AND activo = 1');
 
     if (nameCheck.recordset && nameCheck.recordset.length > 0) {
       throw new Error('Ya existe un producto con ese nombre.');
@@ -58,8 +58,9 @@ export const processProductCreate = async (payload: any) => {
     const newId = insertRes.recordset && insertRes.recordset[0] && insertRes.recordset[0].id;
     if (!newId) throw new Error('No se pudo crear el producto.');
 
-    // If image provided, decode and store
+    // Handle image: priority to file upload, fallback to URL
     if (imagen_b64 && imagen_filename) {
+      // If image provided as base64, decode and store
       const productDir = path.join(UPLOAD_DIR, 'productos', String(newId));
       fs.mkdirSync(productDir, { recursive: true });
       const safeName = `${Date.now()}_${imagen_filename.replace(/[^a-zA-Z0-9_.-]/g, '_')}`;
@@ -72,6 +73,13 @@ export const processProductCreate = async (payload: any) => {
         .input('producto_id', mssql.Int, newId)
         .input('ruta_imagen', mssql.NVarChar(mssql.MAX), filePath)
         .query('INSERT INTO ProductoImagenes (producto_id, ruta_imagen, es_principal, orden) VALUES (@producto_id, @ruta_imagen, 1, 0)');
+    } else if (imagen_url && typeof imagen_url === 'string' && imagen_url.trim()) {
+      // If image provided as URL, save the URL directly
+      await trx.request()
+        .input('producto_id', mssql.Int, newId)
+        .input('ruta_imagen', mssql.NVarChar(mssql.MAX), imagen_url.trim())
+        .query('INSERT INTO ProductoImagenes (producto_id, ruta_imagen, es_principal, orden) VALUES (@producto_id, @ruta_imagen, 1, 0)');
+      logger.info(`Producto ${newId} creado con imagen URL: ${imagen_url}`);
     }
 
     logger.info(`Producto creado con id=${newId}`);

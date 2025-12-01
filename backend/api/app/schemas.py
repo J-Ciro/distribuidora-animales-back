@@ -166,6 +166,7 @@ class ProductoUpdate(BaseModel):
     subcategoria_id: Optional[int] = None
     cantidad_disponible: Optional[int] = Field(None, ge=0)
     activo: Optional[bool] = None
+    imagenUrl: Optional[str] = None  # Support external image URL
 
 
 class ProductoResponse(BaseModel):

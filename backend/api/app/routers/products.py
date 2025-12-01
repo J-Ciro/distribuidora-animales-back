@@ -177,6 +177,11 @@ async def create_product(
 
     if imagen_b64 and imagen_filename:
         message.update({"imagen_filename": imagen_filename, "imagen_b64": imagen_b64})
+    
+    # Support imagen_url from payload (external URL)
+    imagen_url = payload.get('imagenUrl') or payload.get('imagen_url')
+    if imagen_url and isinstance(imagen_url, str) and imagen_url.strip():
+        message["imagen_url"] = imagen_url.strip()
 
     # Publish message to RabbitMQ
     try:
@@ -517,6 +522,32 @@ async def update_product(
         producto['categoria'] = None
         producto['subcategoria'] = None
 
+    # Handle image changes (both imagenUrl and imagenFile)
+    # If imagenUrl is provided, delete existing and insert new URL
+    if 'imagenUrl' in data and data.get('imagenUrl'):
+        imagen_url = data.get('imagenUrl').strip()
+        if imagen_url:  # Only if non-empty
+            try:
+                # Delete existing images and add the new URL
+                db.execute(text("DELETE FROM ProductoImagenes WHERE producto_id = :id"), {"id": producto_id})
+                db.execute(text("INSERT INTO ProductoImagenes (producto_id, ruta_imagen, es_principal, orden) VALUES (:producto_id, :ruta_imagen, 1, 0)"), 
+                          {"producto_id": producto_id, "ruta_imagen": imagen_url})
+                db.commit()
+                logger.info(f"Updated product {producto_id} with imagen URL: {imagen_url}")
+            except Exception as e:
+                logger.exception(f"Error updating product image URL: {e}")
+                db.rollback()
+    # If imagenFile is provided (file upload), also delete existing and prepare for worker
+    elif 'imagenFile' in data or file is not None:
+        # Delete existing images - new file will be handled by worker or separate upload endpoint
+        try:
+            db.execute(text("DELETE FROM ProductoImagenes WHERE producto_id = :id"), {"id": producto_id})
+            db.commit()
+            logger.info(f"Deleted existing images for product {producto_id} due to new file upload")
+        except Exception as e:
+            logger.exception(f"Error deleting existing images: {e}")
+            db.rollback()
+
     # Fetch images
     try:
         imgs = []
@@ -680,7 +711,7 @@ async def upload_product_image(
         except Exception:
             pass
 
-    return JSONResponse(status_code=status.HTTP_201_CREATED, content={"status": "success", "message": "Imagen subida correctamente", "ruta": file_path})
+    return JSONResponse(status_code=status.HTTP_201_CREATED, content={"status": "success", "message": "Imagen subida correctamente", "ruta_imagen": file_path, "path": file_path})
 
 
 @router.get("/{producto_id}/images")
