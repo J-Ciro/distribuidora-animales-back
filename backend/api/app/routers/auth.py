@@ -152,12 +152,16 @@ async def register(request: RegisterRequest, db: Session = Depends(get_db)):
         db.refresh(nuevo_usuario)
         
         # 9. Send verification email
+        logger.info(f"📧 Intentando enviar código de verificación a {request.email}")
+        logger.info(f"🔑 Código generado: {verification_code}")
         try:
             email_sent = email_service.send_verification_code(request.email, verification_code)
-            if not email_sent:
-                logger.warning(f"Failed to send verification email to {request.email}")
+            if email_sent:
+                logger.info(f"✅ Código enviado exitosamente a {request.email}")
+            else:
+                logger.warning(f"⚠️ No se pudo enviar email a {request.email} - revisar configuración SMTP")
         except Exception as e:
-            logger.error(f"Error sending verification email: {str(e)}")
+            logger.error(f"❌ Error al enviar email: {str(e)}")
             # No fallar el registro si el email no se envía
         
         # 10. Return success response
@@ -372,12 +376,16 @@ async def resend_code(request: ResendCodeRequest, db: Session = Depends(get_db))
         db.refresh(verification_record)
         
         # 7. Send verification email
+        logger.info(f"📧 Reenviando código de verificación a {usuario.email}")
+        logger.info(f"🔑 Nuevo código generado: {verification_code}")
         try:
             email_sent = email_service.send_verification_code(usuario.email, verification_code)
-            if not email_sent:
-                logger.warning(f"Failed to send resend verification email to {usuario.email}")
+            if email_sent:
+                logger.info(f"✅ Código reenviado exitosamente a {usuario.email}")
+            else:
+                logger.warning(f"⚠️ No se pudo reenviar email a {usuario.email}")
         except Exception as e:
-            logger.error(f"Error sending resend verification email: {str(e)}")
+            logger.error(f"❌ Error al reenviar email: {str(e)}")
             # No fallar el reenvío si el email no se envía
         
         return {

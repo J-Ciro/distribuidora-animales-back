@@ -18,7 +18,7 @@ class EmailService:
         self.smtp_server = settings.SMTP_SERVER
         self.smtp_port = settings.SMTP_PORT
         self.smtp_user = settings.SMTP_USER
-        self.smtp_password = settings.SMTP_PASSWORD
+        self.smtp_password = str(settings.SMTP_PASSWORD).strip()
     
     def _send_email(self, to_email: str, subject: str, html_content: str) -> bool:
         """
@@ -45,15 +45,22 @@ class EmailService:
             
             # Conectar y enviar
             with smtplib.SMTP(self.smtp_server, self.smtp_port) as server:
+                server.set_debuglevel(0)
                 server.starttls()  # Activar encriptación TLS
-                server.login(self.smtp_user, self.smtp_password)
+                server.login(self.smtp_user.encode('ascii', 'ignore').decode('ascii'), 
+                           self.smtp_password.encode('ascii', 'ignore').decode('ascii'))
                 server.send_message(message)
             
-            logger.info(f"Email enviado exitosamente a {to_email}")
+            logger.info(f"✅ Email enviado exitosamente a {to_email}")
             return True
             
+        except smtplib.SMTPAuthenticationError as e:
+            logger.error(f"❌ ERROR AUTENTICACIÓN SMTP: {str(e)}")
+            logger.error(f"   Verifica SMTP_PASSWORD en .env - debe ser contraseña de aplicación")
+            return False
         except Exception as e:
-            logger.error(f"Error enviando email a {to_email}: {str(e)}")
+            logger.error(f"❌ Error enviando email a {to_email}: {str(e)}")
+            logger.error(f"   Tipo de error: {type(e).__name__}")
             return False
     
     def send_verification_code(self, to_email: str, code: str) -> bool:
