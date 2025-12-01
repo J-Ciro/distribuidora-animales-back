@@ -24,6 +24,10 @@ services:
       - RABBITMQ_PORT=5672
       - RABBITMQ_USER=guest
       - RABBITMQ_PASSWORD=guest
+      - SMTP_SERVER=smtp.gmail.com
+      - SMTP_PORT=587
+      - SMTP_USER=paulagutierrez0872@gmail.com
+      - SMTP_PASSWORD=smzqxhigmjateeoy
     networks:
       - distribuidora-network
     volumes:
