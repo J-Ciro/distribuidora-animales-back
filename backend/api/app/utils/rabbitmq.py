@@ -1,5 +1,6 @@
 """
 RabbitMQ producer for publishing messages to message queues
+Implements MessageBroker interface for dependency inversion
 """
 import pika
 import json
