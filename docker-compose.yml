@@ -28,6 +28,13 @@ services:
       - SMTP_PASSWORD=ximz ubff zigp wnxj
       - EMAIL_FROM_NAME=Distribuidora Perros y Gatos
       - EMAIL_FROM_ADDRESS=distribuidoraperrosgatos@gmail.com
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/docs", "||", "exit", "1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 40s
+    restart: unless-stopped
     networks:
       - distribuidora-network
     volumes:
@@ -61,6 +68,7 @@ services:
       - RABBITMQ_PORT=5672
       - RABBITMQ_USER=guest
       - RABBITMQ_PASSWORD=guest
+    restart: unless-stopped
     networks:
       - distribuidora-network
 
@@ -75,6 +83,8 @@ services:
       interval: 30s
       timeout: 30s
       retries: 3
+      start_period: 60s
+    restart: unless-stopped
     networks:
       - distribuidora-network
 

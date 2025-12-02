@@ -38,10 +38,14 @@ env/
 *~
 .DS_Store
 
-# Environment files
+# Environment files (mantener .env.example para instalación)
 .env
 .env.local
 .env.*.local
+backend/api/.env
+backend/worker/.env
+!backend/api/.env.example
+!backend/worker/.env.example
 
 # Uploads
 uploads/
