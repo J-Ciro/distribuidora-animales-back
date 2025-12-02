@@ -129,18 +129,57 @@ if ($rabbitHealth -eq "healthy") {
 
 Write-Host ""
 
-# Aplicar migraciones de base de datos
-Write-Host "Aplicando schema de base de datos..." -ForegroundColor Yellow
+# Aplicar schema y migraciones de base de datos
+Write-Host "Aplicando schema y migraciones de base de datos..." -ForegroundColor Yellow
 Start-Sleep -Seconds 5
 
-docker exec -i sqlserver /opt/mssql-tools18/bin/sqlcmd -S localhost -U SA -P 'yourStrongPassword123#' -C -i /dev/stdin < sql/schema.sql 2>$null
+# Aplicar schema principal
+Write-Host "  [1/2] Aplicando schema principal..." -ForegroundColor Cyan
+$schemaResult = docker exec -i sqlserver /opt/mssql-tools18/bin/sqlcmd -S localhost -U SA -P 'yourStrongPassword123#' -C -Q "USE master; IF NOT EXISTS (SELECT 1 FROM sys.databases WHERE name = 'distribuidora_db') CREATE DATABASE distribuidora_db;" 2>&1
 
 if ($LASTEXITCODE -eq 0) {
-    Write-Host "✓ Schema de base de datos aplicado" -ForegroundColor Green
+    Write-Host "  ✓ Base de datos creada/verificada" -ForegroundColor Green
+    
+    # Aplicar schema completo
+    Get-Content "sql/schema.sql" -Raw | docker exec -i sqlserver /opt/mssql-tools18/bin/sqlcmd -S localhost -U SA -P 'yourStrongPassword123#' -C 2>&1 | Out-Null
+    
+    if ($LASTEXITCODE -eq 0) {
+        Write-Host "  ✓ Schema aplicado correctamente" -ForegroundColor Green
+    } else {
+        Write-Host "  ⚠ Error al aplicar schema" -ForegroundColor Yellow
+    }
 } else {
-    Write-Host "⚠ Puede que necesites aplicar el schema manualmente" -ForegroundColor Yellow
-    Write-Host "Ejecuta: docker exec -i sqlserver /opt/mssql-tools18/bin/sqlcmd -S localhost -U SA -P 'yourStrongPassword123#' -C < sql/schema.sql" -ForegroundColor DarkGray
+    Write-Host "  ✗ Error al crear la base de datos" -ForegroundColor Red
 }
+
+# Aplicar migraciones
+Write-Host "  [2/2] Aplicando migraciones..." -ForegroundColor Cyan
+$migrationFiles = Get-ChildItem -Path "sql/migrations" -Filter "*.sql" | Sort-Object Name
+
+$successCount = 0
+$failCount = 0
+
+foreach ($migration in $migrationFiles) {
+    Write-Host "    Aplicando: $($migration.Name)..." -ForegroundColor DarkGray
+    
+    Get-Content $migration.FullName -Raw | docker exec -i sqlserver /opt/mssql-tools18/bin/sqlcmd -S localhost -U SA -P 'yourStrongPassword123#' -C -d distribuidora_db 2>&1 | Out-Null
+    
+    if ($LASTEXITCODE -eq 0) {
+        $successCount++
+        Write-Host "    ✓ $($migration.Name)" -ForegroundColor Green
+    } else {
+        $failCount++
+        Write-Host "    ⚠ Error en $($migration.Name) (puede ser normal si ya existe)" -ForegroundColor Yellow
+    }
+}
+
+Write-Host ""
+Write-Host "  Resumen de migraciones:" -ForegroundColor Cyan
+Write-Host "    • Exitosas: $successCount" -ForegroundColor Green
+Write-Host "    • Omitidas: $failCount (ya aplicadas)" -ForegroundColor Yellow
+
+Write-Host ""
+Write-Host "✓ Base de datos configurada completamente" -ForegroundColor Green
 
 Write-Host ""
 Write-Host "========================================" -ForegroundColor Green

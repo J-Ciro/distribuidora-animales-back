@@ -183,6 +183,15 @@ docker-compose down
 docker-compose up -d
 ```
 
+**❌ Error en migraciones de base de datos**
+```powershell
+# Aplicar migraciones manualmente
+.\apply-migrations.ps1
+
+# Ver estado de las tablas
+docker exec sqlserver /opt/mssql-tools18/bin/sqlcmd -S localhost -U SA -P 'yourStrongPassword123#' -C -d distribuidora_db -Q "SELECT TABLE_NAME FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_TYPE='BASE TABLE';"
+```
+
 ### Frontend
 
 **❌ Error: "npm install falla"**
