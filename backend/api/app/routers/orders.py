@@ -31,9 +31,15 @@ def _pedido_to_response(db, pedido: models.Pedido):
     items_resp = []
     
     for item in items:
-        # Get product details
+        # Get product details including main image
         producto = db.execute(
-            text("SELECT id, nombre FROM Productos WHERE id = :producto_id"),
+            text("""
+                SELECT p.id, p.nombre, 
+                       (SELECT TOP 1 ruta_imagen FROM ProductoImagenes 
+                        WHERE producto_id = p.id ORDER BY orden ASC) as imagen
+                FROM Productos p 
+                WHERE p.id = :producto_id
+            """),
             {"producto_id": item.producto_id}
         ).fetchone()
         
@@ -47,7 +53,7 @@ def _pedido_to_response(db, pedido: models.Pedido):
         # Add product details if found
         if producto:
             item_data["producto_nombre"] = producto.nombre
-            item_data["producto_imagen"] = None  # Column doesn't exist in DB
+            item_data["producto_imagen"] = producto.imagen
         
         items_resp.append(item_data)
     

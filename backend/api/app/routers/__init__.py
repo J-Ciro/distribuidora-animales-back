@@ -10,6 +10,7 @@ from app.routers.carousel import router as carousel_router
 from app.routers.orders import router as orders_router, public_router as orders_public_router
 from app.routers.admin_users import router as admin_users_router
 from app.routers.home_products import router as home_products_router
+from app.routers.ratings import public_router as ratings_public_router, admin_router as ratings_admin_router
 
 __all__ = [
     'auth_router',
@@ -21,4 +22,6 @@ __all__ = [
     'orders_public_router',
     'admin_users_router',
     'home_products_router',
+    'ratings_public_router',
+    'ratings_admin_router',
 ]

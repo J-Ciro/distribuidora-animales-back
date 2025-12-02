@@ -275,9 +275,11 @@ class PedidoItemResponse(BaseModel):
     producto_id: int
     cantidad: int
     precio_unitario: float
+    producto_nombre: Optional[str] = None
+    producto_imagen: Optional[str] = None
     
     class Config:
-        from_attributes = True
+        from_attributes = False  # Changed to False to allow dict construction
 
 
 class PedidoResponse(BaseModel):
@@ -296,7 +298,7 @@ class PedidoResponse(BaseModel):
     items: List[PedidoItemResponse] = []
     
     class Config:
-        from_attributes = True
+        from_attributes = False  # Changed to False to allow dict construction
 
 
 # Carousel Schemas
@@ -313,14 +315,14 @@ class CarruselImagenUpdate(BaseModel):
 class CarruselImagenResponse(BaseModel):
     id: int
     orden: int
-    ruta_imagen: str = Field(..., alias="imagen_url")
+    imagen_url: str  # This will read from the 'imagen_url' property in the model
     link_url: Optional[str]
     activo: bool
-    fecha_creacion: datetime = Field(..., alias="created_at")
 
     class Config:
         # Allow reading from ORM attributes and populate by field name when needed
         from_attributes = True
+        populate_by_name = True
         allow_population_by_field_name = True
 
 
@@ -399,4 +401,60 @@ class PedidosListResponse(BaseModel):
     status: str = "success"
     data: List[PedidoResponse] = []
     meta: MetaPage
+
+
+# Rating Schemas
+class CalificacionCreate(BaseModel):
+    """Request schema for creating a rating"""
+    producto_id: int
+    pedido_id: int
+    calificacion: int = Field(..., ge=1, le=5)
+    comentario: Optional[str] = Field(None, max_length=500)
+
+
+class CalificacionUpdate(BaseModel):
+    """Request schema for updating a rating"""
+    calificacion: Optional[int] = Field(None, ge=1, le=5)
+    comentario: Optional[str] = Field(None, max_length=500)
+    visible: Optional[bool] = None
+    aprobado: Optional[bool] = None
+
+
+class CalificacionResponse(BaseModel):
+    id: int
+    producto_id: int
+    usuario_id: int
+    pedido_id: int
+    calificacion: int
+    comentario: Optional[str]
+    fecha_creacion: datetime
+    fecha_actualizacion: Optional[datetime]
+    aprobado: bool
+    visible: bool
+    usuario_nombre: Optional[str] = None
+    producto_nombre: Optional[str] = None
+    
+    class Config:
+        from_attributes = True
+
+
+class ProductoStatsResponse(BaseModel):
+    producto_id: int
+    promedio_calificacion: float
+    total_calificaciones: int
+    total_5_estrellas: int
+    total_4_estrellas: int
+    total_3_estrellas: int
+    total_2_estrellas: int
+    total_1_estrella: int
+    fecha_actualizacion: Optional[datetime]
+    
+    class Config:
+        from_attributes = True
+
+
+class CalificacionesListResponse(BaseModel):
+    status: str = "success"
+    data: List[CalificacionResponse] = []
+    meta: Optional[MetaPage] = None
 

@@ -46,7 +46,8 @@ async def add_carousel_image(
     orden: int = Form(..., ge=1, le=5),
     link_url: Optional[str] = Form(None),
     created_by: Optional[str] = Form(None),
-    file: UploadFile = File(...),
+    imagen_url: Optional[str] = Form(None),
+    file: Optional[UploadFile] = File(None),
     db: Session = Depends(get_db)
 ):
     """
@@ -55,68 +56,105 @@ async def add_carousel_image(
     Requirements (HU_MANAGE_CAROUSEL):
     - Max 5 images allowed (error if trying to exceed)
     - orden must be unique and 1-5
+    - Accepts either file upload OR imagen_url, not both
     - File max 10 MB
     - Allowed formats: jpg, jpeg, png, svg, webp
     - Stores in uploads/carrusel/
     - Publishes carrusel.imagen.crear queue message
     """
-    # Basic presence validation
-    if not file:
-        return JSONResponse(status_code=status.HTTP_400_BAD_REQUEST, content={"status": "error", "message": "Por favor, completa todos los campos obligatorios."})
-
-    # Validate extension
-    filename = file.filename or ""
-    _, ext = os.path.splitext(filename.lower())
-    if ext not in settings.ALLOWED_IMAGE_EXTENSIONS:
-        return JSONResponse(status_code=status.HTTP_400_BAD_REQUEST, content={"status": "error", "message": "Formato o tamaño de imagen no válido."})
-
-    # Read bytes and validate size
-    contents = await file.read()
-    if not contents or len(contents) == 0 or len(contents) > settings.MAX_FILE_SIZE:
-        return JSONResponse(status_code=status.HTTP_400_BAD_REQUEST, content={"status": "error", "message": "Formato o tamaño de imagen no válido."})
+    # Validate that either file or imagen_url is provided, but not both
+    if not file and not imagen_url:
+        return JSONResponse(status_code=status.HTTP_400_BAD_REQUEST, content={"status": "error", "message": "Por favor, proporciona una imagen (archivo o URL)."})
+    
+    if file and imagen_url:
+        return JSONResponse(status_code=status.HTTP_400_BAD_REQUEST, content={"status": "error", "message": "Proporciona solo un método: archivo o URL, no ambos."})
 
     # Check active images limit
-    active_count = db.query(models.CarruselImagen).filter(models.CarruselImagen.activo == True).count()
+    active_images = db.query(models.CarruselImagen).filter(models.CarruselImagen.activo == True).order_by(models.CarruselImagen.orden.asc()).all()
+    active_count = len(active_images)
+    
     if active_count >= 5:
-        return JSONResponse(status_code=status.HTTP_400_BAD_REQUEST, content={"status": "error", "message": "El carrusel ya tiene el número máximo de imágenes."})
-
-    # Prepare upload directory (use configured UPLOAD_DIR)
-    upload_dir = os.path.abspath(os.path.join(settings.UPLOAD_DIR, "carrusel"))
-    os.makedirs(upload_dir, exist_ok=True)
-
-    unique_name = f"{uuid.uuid4().hex}{ext}"
-    saved_path = os.path.join(upload_dir, unique_name)
-    # Save file to disk
-    try:
-        with open(saved_path, "wb") as f:
-            f.write(contents)
-    except Exception as e:
-        logger.error(f"Failed saving uploaded file: {str(e)}")
-        return JSONResponse(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, content={"status": "error", "message": "Formato o tamaño de imagen no válido."})
+        return JSONResponse(status_code=status.HTTP_400_BAD_REQUEST, content={"status": "error", "message": "El carrusel ya tiene el número máximo de imágenes. Por favor, elimina una imagen antes de agregar otra."})
 
     # Normalize created_by
     created_by = created_by or "unknown"
+    
+    # Determine the final image URL
+    final_image_url = None
+    saved_path = None
+    
+    if file:
+        # Validate extension
+        filename = file.filename or ""
+        _, ext = os.path.splitext(filename.lower())
+        if ext not in settings.ALLOWED_IMAGE_EXTENSIONS:
+            return JSONResponse(status_code=status.HTTP_400_BAD_REQUEST, content={"status": "error", "message": "Formato o tamaño de imagen no válido."})
 
-    # Insert into DB and handle orden uniqueness (shift existing >= orden)
-    try:
-        # Shift existing orders >= orden up by 1
-        db.query(models.CarruselImagen).filter(models.CarruselImagen.activo == True, models.CarruselImagen.orden >= orden).update({models.CarruselImagen.orden: models.CarruselImagen.orden + 1})
+        # Read bytes and validate size
+        contents = await file.read()
+        if not contents or len(contents) == 0 or len(contents) > settings.MAX_FILE_SIZE:
+            return JSONResponse(status_code=status.HTTP_400_BAD_REQUEST, content={"status": "error", "message": "Formato o tamaño de imagen no válido."})
+
+        # Prepare upload directory (use configured UPLOAD_DIR)
+        upload_dir = os.path.abspath(os.path.join(settings.UPLOAD_DIR, "carrusel"))
+        os.makedirs(upload_dir, exist_ok=True)
+
+        unique_name = f"{uuid.uuid4().hex}{ext}"
+        saved_path = os.path.join(upload_dir, unique_name)
+        # Save file to disk
+        try:
+            with open(saved_path, "wb") as f:
+                f.write(contents)
+        except Exception as e:
+            logger.error(f"Failed saving uploaded file: {str(e)}")
+            return JSONResponse(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, content={"status": "error", "message": "Formato o tamaño de imagen no válido."})
+        
         # Store public URL in DB so frontend can load it directly
-        public_url = f"/app/uploads/carrusel/{unique_name}"
+        final_image_url = f"/app/uploads/carrusel/{unique_name}"
+    else:
+        # Use the provided URL
+        final_image_url = imagen_url
+
+    # Insert into DB and handle orden uniqueness
+    try:
+        from sqlalchemy import text
+        
+        # Create new image
         new_img = models.CarruselImagen(
-            imagen_url=public_url,
+            imagen_url=final_image_url,
             orden=orden,
             link_url=link_url,
-            created_by=created_by,
             activo=True
         )
+        
+        # Check if there's already an image at this orden
+        existing_at_orden = db.query(models.CarruselImagen).filter(
+            models.CarruselImagen.activo == True,
+            models.CarruselImagen.orden == orden
+        ).first()
+        
+        if existing_at_orden:
+            # Shift this and all subsequent images down by 1
+            # We'll do this in reverse order to avoid conflicts
+            images_to_shift = db.query(models.CarruselImagen).filter(
+                models.CarruselImagen.activo == True,
+                models.CarruselImagen.orden >= orden
+            ).order_by(models.CarruselImagen.orden.desc()).all()
+            
+            for img in images_to_shift:
+                img.orden = img.orden + 1
+                db.add(img)
+            db.flush()
+        
+        # Now add the new image
         db.add(new_img)
         db.commit()
         db.refresh(new_img)
+            
     except Exception as e:
         logger.error(f"DB error creating carousel image: {str(e)}")
         db.rollback()
-        return JSONResponse(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, content={"status": "error", "message": "Formato o tamaño de imagen no válido."})
+        return JSONResponse(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, content={"status": "error", "message": "Error al crear imagen del carrusel."})
 
     # Publish message to RabbitMQ (non-blocking best-effort)
     try:
@@ -236,28 +274,28 @@ async def delete_carousel_image(imagen_id: int, db: Session = Depends(get_db)):
     if not img:
         return JSONResponse(status_code=status.HTTP_404_NOT_FOUND, content={"status": "error", "message": "Imagen no encontrada."})
 
-    # Mark as inactive
+    # Delete the image completely (not just mark as inactive)
     try:
-        img.activo = False
-        db.add(img)
+        # Try to remove physical file first if imagen_url points to uploads folder
+        try:
+            if img.imagen_url and img.imagen_url.startswith("/app/uploads/carrusel/"):
+                filename = os.path.basename(img.imagen_url)
+                filesystem_path = os.path.abspath(os.path.join(settings.UPLOAD_DIR, "carrusel", filename))
+                if os.path.exists(filesystem_path):
+                    try:
+                        os.remove(filesystem_path)
+                    except Exception as e:
+                        logger.warning(f"Failed to delete file {filesystem_path}: {str(e)}")
+        except Exception:
+            pass
+        
+        # Delete from database
+        db.delete(img)
         db.commit()
     except Exception as e:
         logger.error(f"DB error deleting carousel image: {str(e)}")
         db.rollback()
         return JSONResponse(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, content={"status": "error", "message": "Imagen no encontrada."})
-
-    # Try to remove physical file if imagen_url points to uploads folder
-    try:
-        if img.imagen_url and img.imagen_url.startswith("/app/uploads/carrusel/"):
-            filename = os.path.basename(img.imagen_url)
-            filesystem_path = os.path.abspath(os.path.join(settings.UPLOAD_DIR, "carrusel", filename))
-            if os.path.exists(filesystem_path):
-                try:
-                    os.remove(filesystem_path)
-                except Exception as e:
-                    logger.warning(f"Failed to delete file {filesystem_path}: {str(e)}")
-    except Exception:
-        pass
 
     # Reindex remaining active images to be consecutive starting from 1
     try:

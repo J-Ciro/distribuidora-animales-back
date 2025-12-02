@@ -96,17 +96,15 @@ class RefreshToken(Base):
 
 
 class CarruselImagen(Base):
-    __tablename__ = 'carrusel_imagenes'
+    __tablename__ = 'CarruselImagenes'
 
     id = Column(Integer, primary_key=True, index=True)
-    imagen_url = Column(String(1024), nullable=False)
-    thumbnail_url = Column(String(1024), nullable=True)
+    imagen_url = Column('ruta_imagen', String(1024), nullable=False)  # Maps to ruta_imagen in DB
     orden = Column(Integer, nullable=False, index=True)
     link_url = Column(String(2048), nullable=True)
-    created_by = Column(String(255), nullable=True)
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(DateTime(timezone=True), onupdate=func.now(), server_default=func.now())
     activo = Column(Boolean, nullable=False, default=True)
+    fecha_creacion = Column('fecha_creacion', DateTime(timezone=True), server_default=func.now())
+    fecha_actualizacion = Column('fecha_actualizacion', DateTime(timezone=True), onupdate=func.now(), server_default=func.now())
 
 
 # Orders models
@@ -147,3 +145,42 @@ class PedidosHistorialEstado(Base):
     usuario_id = Column(Integer, nullable=True)
     nota = Column(String(300), nullable=True)
     fecha = Column(DateTime(timezone=True), server_default=func.now())
+
+
+# Ratings models
+class Calificacion(Base):
+    """
+    Modelo para la tabla Calificaciones
+    Almacena las calificaciones (ratings) de productos por usuarios
+    """
+    __tablename__ = 'Calificaciones'
+    __table_args__ = {'implicit_returning': False}  # Disable OUTPUT clause for SQL Server triggers
+
+    id = Column(Integer, primary_key=True, index=True, autoincrement=True)
+    producto_id = Column(Integer, nullable=False, index=True)
+    usuario_id = Column(Integer, nullable=False, index=True)
+    pedido_id = Column(Integer, nullable=False, index=True)
+    calificacion = Column(Integer, nullable=False)  # 1-5 estrellas
+    comentario = Column(String(500), nullable=True)
+    fecha_creacion = Column(DateTime(timezone=True), server_default=func.now())
+    fecha_actualizacion = Column(DateTime(timezone=True), onupdate=func.now(), server_default=func.now())
+    aprobado = Column(Boolean, default=True, nullable=False)
+    visible = Column(Boolean, default=True, nullable=False)
+
+
+class ProductoStats(Base):
+    """
+    Modelo para la tabla ProductoStats
+    Almacena estadísticas precalculadas de calificaciones por producto
+    """
+    __tablename__ = 'ProductoStats'
+
+    producto_id = Column(Integer, primary_key=True)
+    promedio_calificacion = Column(Numeric(3, 2), default=0, nullable=False)
+    total_calificaciones = Column(Integer, default=0, nullable=False)
+    total_5_estrellas = Column(Integer, default=0, nullable=False)
+    total_4_estrellas = Column(Integer, default=0, nullable=False)
+    total_3_estrellas = Column(Integer, default=0, nullable=False)
+    total_2_estrellas = Column(Integer, default=0, nullable=False)
+    total_1_estrella = Column(Integer, default=0, nullable=False)
+    fecha_actualizacion = Column(DateTime(timezone=True), server_default=func.now())
