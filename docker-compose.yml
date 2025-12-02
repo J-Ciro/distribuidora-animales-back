@@ -24,8 +24,10 @@ services:
       - RABBITMQ_PASSWORD=guest
       - SMTP_SERVER=smtp.gmail.com
       - SMTP_PORT=587
-      - SMTP_USER=paulagutierrez0872@gmail.com
-      - SMTP_PASSWORD=smzqxhigmjateeoy
+      - SMTP_USER=distribuidoraperrosgatos@gmail.com
+      - SMTP_PASSWORD=ximz ubff zigp wnxj
+      - EMAIL_FROM_NAME=Distribuidora Perros y Gatos
+      - EMAIL_FROM_ADDRESS=distribuidoraperrosgatos@gmail.com
     networks:
       - distribuidora-network
     volumes:
@@ -45,8 +47,11 @@ services:
       - RABBITMQ_URL=amqp://guest:guest@rabbitmq:5672/
       - SMTP_HOST=smtp.gmail.com
       - SMTP_PORT=587
-      - SMTP_USER=paulagutierrez0872@gmail.com
-      - SMTP_PASS=TU_CONTRASEÑA_DE_APLICACION_AQUI
+      - SMTP_USER=distribuidoraperrosgatos@gmail.com
+      - SMTP_PASS=ximz ubff zigp wnxj
+      - SMTP_PASSWORD=ximz ubff zigp wnxj
+      - EMAIL_FROM_NAME=Distribuidora Perros y Gatos
+      - EMAIL_FROM_ADDRESS=distribuidoraperrosgatos@gmail.com
       - DB_SERVER=sqlserver
       - DB_PORT=1433
       - DB_NAME=distribuidora_db
