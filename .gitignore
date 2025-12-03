@@ -38,7 +38,11 @@ env/
 *~
 .DS_Store
 
-# Environment files (mantener .env.example para instalación)
+# Environment files (NUNCA subir al repositorio)
+.env
+**/.env
+!.env.example
+!**/.env.example
 
 
 # Uploads
