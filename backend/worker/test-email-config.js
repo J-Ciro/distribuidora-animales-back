@@ -35,14 +35,14 @@ transporter.verify((error, success) => {
     const mailOptions = {
       from: `${process.env.EMAIL_FROM_NAME} <${process.env.EMAIL_FROM_ADDRESS}>`,
       to: process.env.SMTP_USER, // Enviar al mismo correo
-      subject: 'Prueba de configuración - Distribuidora Perros y Gatos',
+      subject: 'Prueba de configuración - Soft PetPlace',
       html: `
         <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
           <h2 style="color: #4F46E5;">¡Configuración Correcta!</h2>
           <p>Este es un email de prueba desde <strong>${process.env.EMAIL_FROM_ADDRESS}</strong></p>
           <p>Si recibes este email, la configuración está funcionando correctamente.</p>
           <hr>
-          <small>Enviado desde el worker de Distribuidora Perros y Gatos</small>
+          <small>Enviado desde el worker de Soft PetPlace</small>
         </div>
       `,
     };
