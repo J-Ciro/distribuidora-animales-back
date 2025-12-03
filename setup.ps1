@@ -365,6 +365,69 @@ try {
 
 Write-Host ""
 
+# Crear usuario Administrador
+Write-Host "  Creando usuario Administrador..." -ForegroundColor Cyan
+Write-Host ""
+Write-Host "  Ingresa los datos del usuario administrador:" -ForegroundColor Yellow
+$adminEmail = Read-Host "    Email del administrador"
+$adminPassword = Read-Host "    Contrasena del administrador" -AsSecureString
+$adminPasswordPlain = [Runtime.InteropServices.Marshal]::PtrToStringAuto([Runtime.InteropServices.Marshal]::SecureStringToBSTR($adminPassword))
+
+# Validar email
+if ($adminEmail -notmatch "^[\w\.-]+@[\w\.-]+\.\w+$") {
+    Write-Host "  [ADVERTENCIA] El formato del email puede no ser valido" -ForegroundColor Yellow
+}
+
+# Validar contraseña mínima
+if ($adminPasswordPlain.Length -lt 6) {
+    Write-Host "  [ADVERTENCIA] La contrasena deberia tener al menos 6 caracteres" -ForegroundColor Yellow
+}
+
+try {
+    # Crear usuario via API
+    $registerBody = @{
+        email = $adminEmail
+        password = $adminPasswordPlain
+        nombre = "Administrador"
+        apellido = "Sistema"
+        telefono = "0000000000"
+    } | ConvertTo-Json
+
+    $registerResponse = Invoke-WebRequest `
+        -Uri "http://localhost:8000/api/auth/register" `
+        -Method POST `
+        -ContentType "application/json" `
+        -Body $registerBody `
+        -UseBasicParsing `
+        -TimeoutSec 10 2>$null
+
+    if ($registerResponse.StatusCode -eq 200 -or $registerResponse.StatusCode -eq 201) {
+        $responseData = $registerResponse.Content | ConvertFrom-Json
+        $userId = $responseData.id
+        
+        Write-Host "  [OK] Usuario creado con ID: $userId" -ForegroundColor Green
+        
+        # Marcar email como verificado y asignar rol Admin
+        $updateQuery = "UPDATE Usuarios SET email_verificado=1, rol='Admin' WHERE id=$userId"
+        docker exec sqlserver /opt/mssql-tools/bin/sqlcmd -S localhost -U sa -P "yourStrongPassword123#" -d distribuidora_db -Q "$updateQuery" 2>&1 | Out-Null
+        
+        Write-Host "  [OK] Usuario configurado como Administrador" -ForegroundColor Green
+        Write-Host ""
+        Write-Host "  Credenciales del administrador:" -ForegroundColor Cyan
+        Write-Host "    Email:     $adminEmail" -ForegroundColor White
+        Write-Host "    Rol:       Admin" -ForegroundColor White
+        Write-Host "    Verificado: Si" -ForegroundColor White
+    } else {
+        Write-Host "  [ADVERTENCIA] Respuesta inesperada del API: $($registerResponse.StatusCode)" -ForegroundColor Yellow
+    }
+} catch {
+    Write-Host "  [ERROR] No se pudo crear el usuario administrador" -ForegroundColor Red
+    Write-Host "  Puedes crearlo manualmente despues desde http://localhost:8000/docs" -ForegroundColor Yellow
+    Write-Host "  Error: $($_.Exception.Message)" -ForegroundColor Gray
+}
+
+Write-Host ""
+
 # ============================================
 # RESUMEN FINAL
 # ============================================
