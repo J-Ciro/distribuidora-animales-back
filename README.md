@@ -187,12 +187,59 @@ Backend API for Distribuidora Perros y Gatos e-commerce platform - a multi-vendo
 # 🏁 Getting Started
 
 ## Requisitos
-- Docker y Docker Compose  
-- O: Python 3.11+, Node.js 18+, SQL Server, RabbitMQ  
+- Docker y Docker Compose instalados
+- Al menos 4GB de RAM disponible para los contenedores
+- Puertos 8000, 5672, 15672 disponibles
 
 ---
 
-# 🐳 Setup con Docker
+# 🐳 Setup con Docker (Recomendado)
+
+## Primera Vez - Inicio Rápido
 
 ```bash
+# 1. Clonar el repositorio
+git clone <url-del-repositorio>
+cd Distribuidora_Perros_Gatos_back
+
+# 2. Iniciar todos los servicios (incluye migración automática)
 docker-compose up -d
+
+# 3. Verificar que la migración fue exitosa
+docker logs distribuidora-db-migrator
+
+# 4. Verificar que la API está funcionando
+curl http://localhost:8000/health
+```
+
+¡Eso es todo! La base de datos se inicializa automáticamente con:
+- ✅ Schema completo (14 tablas)
+- ✅ Migraciones aplicadas
+- ✅ Datos de ejemplo (categorías, productos, carrusel)
+
+**📖 Documentación Detallada**:
+- [Guía Completa del Sistema de Migración](./MIGRACION_BASE_DATOS.md)
+- [Verificación y Troubleshooting](./VERIFICACION_MIGRACION.md)
+
+## Verificar Estado de los Servicios
+
+```bash
+# Ver todos los servicios
+docker-compose ps
+
+# Ver logs de cada servicio
+docker logs distribuidora-api
+docker logs distribuidora-worker
+docker logs distribuidora-db-migrator
+docker logs sqlserver
+
+# Reiniciar desde cero (⚠️ elimina todos los datos)
+docker-compose down -v
+docker-compose up -d
+```
+
+---
+
+# 💻 Setup Local (Sin Docker)
+
+Si prefieres ejecutar los servicios localmente:

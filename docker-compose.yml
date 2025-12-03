@@ -1,4 +1,22 @@
 services:
+  # Database Migration Service
+  db-migrator:
+    image: mcr.microsoft.com/mssql-tools
+    container_name: distribuidora-db-migrator
+    depends_on:
+      sqlserver:
+        condition: service_healthy
+    environment:
+      - SA_PASSWORD=yourStrongPassword123#
+      - DB_SERVER=sqlserver
+      - DB_NAME=distribuidora_db
+    volumes:
+      - ./sql:/docker-entrypoint-initdb.d
+    command: ["/bin/bash", "/docker-entrypoint-initdb.d/init-db.sh"]
+    networks:
+      - distribuidora-network
+    restart: "no"  # Run once only
+
   api:
     build:
       context: .
@@ -11,6 +29,8 @@ services:
         condition: service_healthy
       sqlserver:
         condition: service_healthy
+      db-migrator:
+        condition: service_completed_successfully
     environment:
       - RABBITMQ_URL=amqp://guest:guest@rabbitmq:5672/
       - DB_SERVER=sqlserver
@@ -50,6 +70,8 @@ services:
         condition: service_healthy
       sqlserver:
         condition: service_healthy
+      db-migrator:
+        condition: service_completed_successfully
     environment:
       - RABBITMQ_URL=amqp://guest:guest@rabbitmq:5672/
       - SMTP_HOST=smtp.gmail.com

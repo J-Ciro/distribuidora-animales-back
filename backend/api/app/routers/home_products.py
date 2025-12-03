@@ -23,24 +23,26 @@ router = APIRouter(
 )
 
 
-@router.get("/home/categorias")
+@router.get("/home/categorias", response_model=List[dict])
 async def get_categories_public(db: Session = Depends(get_db)):
     """
     Get all categories (public endpoint - no authentication required)
     
     Returns:
     - List of all categories with basic info
-    - Only returns tipo='categoria' (main categories, not subcategories)
+    - Only returns active categories
     """
     try:
         query = text("""
             SELECT 
                 id,
                 nombre,
-                'categoria' as tipo,
+                descripcion,
+                activo,
                 fecha_creacion,
                 fecha_actualizacion
             FROM Categorias
+            WHERE activo = 1
             ORDER BY nombre ASC
         """)
         
@@ -52,9 +54,10 @@ async def get_categories_public(db: Session = Depends(get_db)):
             categories.append({
                 "id": int(row.id),
                 "nombre": row.nombre,
-                "tipo": row.tipo,
-                "fecha_creacion": row.fecha_creacion,
-                "fecha_actualizacion": row.fecha_actualizacion
+                "descripcion": row.descripcion if row.descripcion else "",
+                "activo": bool(row.activo),
+                "fecha_creacion": row.fecha_creacion.isoformat() if row.fecha_creacion else None,
+                "fecha_actualizacion": row.fecha_actualizacion.isoformat() if row.fecha_actualizacion else None
             })
         
         return categories
