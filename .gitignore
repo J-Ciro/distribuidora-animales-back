@@ -38,10 +38,12 @@ env/
 *~
 .DS_Store
 
-# Environment files
+# Environment files (NUNCA subir al repositorio)
 .env
-.env.local
-.env.*.local
+**/.env
+!.env.example
+!**/.env.example
+
 
 # Uploads
 uploads/

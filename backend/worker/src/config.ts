@@ -35,7 +35,7 @@ export const config = {
     host: process.env.SMTP_HOST || 'smtp.gmail.com',
     port: parseInt(process.env.SMTP_PORT || '587', 10),
     user: process.env.SMTP_USER || '',
-    pass: process.env.SMTP_PASS || '',
-    from: process.env.SMTP_FROM || 'no-reply@distribuidora.com'  // Añadido from
+    pass: process.env.SMTP_PASS || process.env.SMTP_PASSWORD || '',
+    from: `${process.env.EMAIL_FROM_NAME || 'Soft PetPlace'} <${process.env.EMAIL_FROM_ADDRESS || process.env.SMTP_USER || 'distribuidoraperrosgatos@gmail.com'}>`
   },
 };

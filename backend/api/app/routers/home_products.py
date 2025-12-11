@@ -23,6 +23,53 @@ router = APIRouter(
 )
 
 
+@router.get("/home/categorias", response_model=List[dict])
+async def get_categories_public(db: Session = Depends(get_db)):
+    """
+    Get all categories (public endpoint - no authentication required)
+    
+    Returns:
+    - List of all categories with basic info
+    - Only returns active categories
+    """
+    try:
+        query = text("""
+            SELECT 
+                id,
+                nombre,
+                descripcion,
+                activo,
+                fecha_creacion,
+                fecha_actualizacion
+            FROM Categorias
+            WHERE activo = 1
+            ORDER BY nombre ASC
+        """)
+        
+        result = db.execute(query)
+        rows = result.fetchall()
+        
+        categories = []
+        for row in rows:
+            categories.append({
+                "id": int(row.id),
+                "nombre": row.nombre,
+                "descripcion": row.descripcion if row.descripcion else "",
+                "activo": bool(row.activo),
+                "fecha_creacion": row.fecha_creacion.isoformat() if row.fecha_creacion else None,
+                "fecha_actualizacion": row.fecha_actualizacion.isoformat() if row.fecha_actualizacion else None
+            })
+        
+        return categories
+        
+    except Exception as e:
+        logger.exception("Error fetching public categories: %s", e)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Error al obtener categorías"
+        )
+
+
 @router.get("/home/productos", response_model=List[ProductoResponse])
 async def browse_products(
     categoria_id: int = Query(None),

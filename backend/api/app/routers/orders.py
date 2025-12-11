@@ -5,7 +5,7 @@ Handles HU_MANAGE_ORDERS
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.orm import Session
 from typing import List, Optional
-from sqlalchemy import desc
+from sqlalchemy import desc, text
 from app.schemas import (
     PedidoCreate,
     PedidoResponse,
@@ -14,6 +14,7 @@ from app.schemas import (
 )
 from app.database import get_db
 from app.utils.rabbitmq import RabbitMQProducer
+from app.routers.auth import get_current_user
 import app.models as models
 import logging
 
@@ -27,15 +28,38 @@ router = APIRouter(
 
 def _pedido_to_response(db, pedido: models.Pedido):
     items = db.query(models.PedidoItem).filter(models.PedidoItem.pedido_id == pedido.id).all()
-    items_resp = [
-        {
+    items_resp = []
+    
+    for item in items:
+        # Get product details including main image
+        producto = db.execute(
+            text("""
+                SELECT p.id, p.nombre, 
+                       (SELECT TOP 1 ruta_imagen FROM ProductoImagenes 
+                        WHERE producto_id = p.id ORDER BY orden ASC) as imagen
+                FROM Productos p 
+                WHERE p.id = :producto_id
+            """),
+            {"producto_id": item.producto_id}
+        ).fetchone()
+        
+        item_data = {
             "id": item.id,
             "producto_id": item.producto_id,
             "cantidad": item.cantidad,
             "precio_unitario": float(item.precio_unitario),
         }
-        for item in items
-    ]
+        
+        # Add product details if found
+        if producto:
+            item_data["producto_nombre"] = producto.nombre
+            item_data["producto_imagen"] = producto.imagen
+        
+        items_resp.append(item_data)
+    
+    # Get user information
+    usuario = db.query(models.Usuario).filter(models.Usuario.id == pedido.usuario_id).first()
+    cliente_nombre = usuario.nombre_completo if usuario else f"Cliente #{pedido.usuario_id}"
 
     # Get user information
     usuario = db.query(models.Usuario).filter(models.Usuario.id == pedido.usuario_id).first()
@@ -53,6 +77,7 @@ def _pedido_to_response(db, pedido: models.Pedido):
     return {
         "id": pedido.id,
         "usuario_id": pedido.usuario_id,
+<<<<<<< HEAD
         "clienteId": cliente_id,
         "cliente_id": cliente_id,
         "clienteNombre": cliente_nombre,
@@ -69,6 +94,18 @@ def _pedido_to_response(db, pedido: models.Pedido):
         "fecha_creacion": fecha_creacion_str,
         "fecha": fecha_creacion_str,  # Alias for frontend compatibility
         "created_at": fecha_creacion_str,  # Another alias
+=======
+        "clienteNombre": cliente_nombre,
+        "estado": pedido.estado,
+        "total": float(pedido.total),
+        "metodo_pago": pedido.metodo_pago or 'Efectivo',
+        "direccion_entrega": pedido.direccion_entrega,
+        "municipio": pedido.municipio,
+        "departamento": pedido.departamento,
+        "pais": pedido.pais or 'Colombia',
+        "telefono_contacto": pedido.telefono_contacto,
+        "fecha_creacion": pedido.fecha_creacion,
+>>>>>>> 125b786d3b1dd8f99495e4149cf969ee3116670b
         "items": items_resp,
     }
 
@@ -111,7 +148,11 @@ async def create_order(payload: PedidoCreate, db: Session = Depends(get_db)):
         usuario_id=payload.usuario_id,
         estado='Pendiente',
         direccion_entrega=payload.direccion_entrega,
+        municipio=payload.municipio,
+        departamento=payload.departamento,
+        pais=payload.pais or 'Colombia',
         telefono_contacto=payload.telefono_contacto,
+        metodo_pago=payload.metodo_pago or 'Efectivo',
         nota_especial=payload.nota_especial,
     )
     db.add(pedido)
@@ -123,6 +164,38 @@ async def create_order(payload: PedidoCreate, db: Session = Depends(get_db)):
         producto_id = int(it.get('producto_id'))
         cantidad = int(it.get('cantidad'))
         precio = float(it.get('precio_unitario')) if it.get('precio_unitario') is not None else 0.0
+        
+        # Verificar y descontar stock del producto usando SQL directo
+        query_producto = text("""
+            SELECT id, nombre, cantidad_disponible 
+            FROM Productos 
+            WHERE id = :producto_id
+        """)
+        result = db.execute(query_producto, {"producto_id": producto_id})
+        producto = result.fetchone()
+        
+        if not producto:
+            db.rollback()
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST, 
+                detail=f"Producto con ID {producto_id} no encontrado"
+            )
+        
+        if producto.cantidad_disponible < cantidad:
+            db.rollback()
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Stock insuficiente para {producto.nombre}. Disponible: {producto.cantidad_disponible}, Solicitado: {cantidad}"
+            )
+        
+        # Descontar el stock
+        update_stock = text("""
+            UPDATE Productos 
+            SET cantidad_disponible = cantidad_disponible - :cantidad 
+            WHERE id = :producto_id
+        """)
+        db.execute(update_stock, {"cantidad": cantidad, "producto_id": producto_id})
+        
         total += cantidad * precio
         pi = models.PedidoItem(
             pedido_id=pedido.id,
@@ -318,4 +391,117 @@ async def get_user_orders(
         .all()
     )
     return [_pedido_to_response(db, p) for p in pedidos]
-    raise HTTPException(status_code=status.HTTP_501_NOT_IMPLEMENTED, detail="Not implemented")
+
+
+# ==================== PUBLIC ROUTER FOR CUSTOMER ORDERS ====================
+public_router = APIRouter(
+    prefix="/api/pedidos",
+    tags=["pedidos-public"]
+)
+
+@public_router.post("/", response_model=PedidoResponse, status_code=status.HTTP_201_CREATED)
+async def create_customer_order(payload: PedidoCreate, db: Session = Depends(get_db)):
+    """
+    Create a new order (public endpoint for customers)
+    """
+    # Validate usuario exists
+    usuario = db.query(models.Usuario).filter(models.Usuario.id == payload.usuario_id).first()
+    if not usuario:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Usuario no existe")
+
+    pedido = models.Pedido(
+        usuario_id=payload.usuario_id,
+        estado='Pendiente',
+        direccion_entrega=payload.direccion_entrega,
+        municipio=payload.municipio,
+        departamento=payload.departamento,
+        pais=payload.pais or 'Colombia',
+        telefono_contacto=payload.telefono_contacto,
+        metodo_pago=payload.metodo_pago or 'Efectivo',
+        nota_especial=payload.nota_especial,
+    )
+    db.add(pedido)
+    db.flush()
+
+    total = 0
+    items_payload = getattr(payload, 'items', []) or []
+    for it in items_payload:
+        producto_id = int(it.get('producto_id'))
+        cantidad = int(it.get('cantidad'))
+        precio = float(it.get('precio_unitario')) if it.get('precio_unitario') is not None else 0.0
+        
+        # Verificar y descontar stock del producto usando SQL directo
+        query_producto = text("""
+            SELECT id, nombre, cantidad_disponible 
+            FROM Productos 
+            WHERE id = :producto_id
+        """)
+        result = db.execute(query_producto, {"producto_id": producto_id})
+        producto = result.fetchone()
+        
+        if not producto:
+            db.rollback()
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST, 
+                detail=f"Producto con ID {producto_id} no encontrado"
+            )
+        
+        if producto.cantidad_disponible < cantidad:
+            db.rollback()
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Stock insuficiente para {producto.nombre}. Disponible: {producto.cantidad_disponible}, Solicitado: {cantidad}"
+            )
+        
+        # Descontar el stock
+        update_stock = text("""
+            UPDATE Productos 
+            SET cantidad_disponible = cantidad_disponible - :cantidad 
+            WHERE id = :producto_id
+        """)
+        db.execute(update_stock, {"cantidad": cantidad, "producto_id": producto_id})
+        
+        total += cantidad * precio
+        pi = models.PedidoItem(
+            pedido_id=pedido.id,
+            producto_id=producto_id,
+            cantidad=cantidad,
+            precio_unitario=precio,
+        )
+        db.add(pi)
+
+    pedido.total = total
+    db.add(pedido)
+    db.commit()
+    db.refresh(pedido)
+
+    logger.info(f"Order created: pedido_id={pedido.id}, usuario_id={payload.usuario_id}, total={total}")
+    return _pedido_to_response(db, pedido)
+
+
+@public_router.get("/my-orders", response_model=List[PedidoResponse])
+async def get_my_orders(
+    skip: int = Query(0, ge=0),
+    limit: int = Query(20, ge=1, le=100),
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user)
+):
+    """
+    Get orders for authenticated user
+    
+    Returns:
+    - All orders for the current user
+    - Sorted by fecha_creacion DESC (newest first)
+    - Includes order items and product details
+    - Pagination support
+    """
+    pedidos = (
+        db.query(models.Pedido)
+        .filter(models.Pedido.usuario_id == current_user.id)
+        .order_by(desc(models.Pedido.fecha_creacion))
+        .offset(skip)
+        .limit(limit)
+        .all()
+    )
+    
+    return [_pedido_to_response(db, p) for p in pedidos]

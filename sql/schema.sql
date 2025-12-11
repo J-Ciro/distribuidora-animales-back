@@ -1,18 +1,8 @@
 -- SQL Server Database Schema for Distribuidora Perros y Gatos
 -- Creates all tables and relationships
 
--- Create Database (if not exists)
-USE master;
-GO
-
-IF NOT EXISTS (SELECT 1 FROM sys.databases WHERE name = 'distribuidora_db')
-BEGIN
-    CREATE DATABASE distribuidora_db;
-END
-GO
-
-USE distribuidora_db;
-GO
+-- Note: This script is executed with sqlcmd -d distribuidora_db
+-- The database is already created by init-db.sh
 
 -- ============================================================
 -- 1. USUARIOS Table

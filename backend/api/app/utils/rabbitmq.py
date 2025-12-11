@@ -1,6 +1,10 @@
 """
 RabbitMQ producer for publishing messages to message queues
+<<<<<<< HEAD
 Improved with persistent connection and retry logic
+=======
+Implements MessageBroker interface for dependency inversion
+>>>>>>> 125b786d3b1dd8f99495e4149cf969ee3116670b
 """
 import pika
 import json

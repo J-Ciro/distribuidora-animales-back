@@ -20,7 +20,8 @@ class Settings(BaseSettings):
     DB_PORT: int = 1433
     DB_NAME: str = "distribuidora_db"
     DB_USER: str = "sa"
-    DB_PASSWORD: str = "YourPassword123!"
+    # SECURITY: DB_PASSWORD must be provided via environment variable - no default for security
+    DB_PASSWORD: str
     
     @property
     def DATABASE_URL(self) -> str:
@@ -40,7 +41,8 @@ class Settings(BaseSettings):
         return f"amqp://{self.RABBITMQ_USER}:{self.RABBITMQ_PASSWORD}@{self.RABBITMQ_HOST}:{self.RABBITMQ_PORT}/{self.RABBITMQ_VHOST}"
     
     # Security & JWT
-    SECRET_KEY: str = "your-secret-key-change-in-production"
+    # SECURITY: SECRET_KEY must be provided via environment variable - no default for security
+    SECRET_KEY: str
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 15
     REFRESH_TOKEN_EXPIRE_DAYS: int = 7

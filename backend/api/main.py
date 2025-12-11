@@ -30,8 +30,11 @@ from app.routers import (
     inventory_router,
     carousel_router,
     orders_router,
+    orders_public_router,
     admin_users_router,
-    home_products_router
+    home_products_router,
+    ratings_public_router,
+    ratings_admin_router
 )
 from app.routers import public_orders
 
@@ -43,6 +46,7 @@ async def lifespan(app: FastAPI):
     Handles database initialization and cleanup
     """
     # Startup
+<<<<<<< HEAD
     logger.info("Starting Distribuidora Perros y Gatos Backend API")
     try:
         init_db()
@@ -50,6 +54,26 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.warning(f"Could not initialize database: {str(e)}")
         logger.warning("Application will continue without database connection")
+=======
+    print("Starting Distribuidora Perros y Gatos Backend API")
+    
+    # Inicializar schema de base de datos si es necesario
+    try:
+        from app.utils.db_init import initialize_database
+        print("Inicializando base de datos...")
+        initialize_database()
+    except Exception as e:
+        print(f"Warning: Could not initialize database schema: {str(e)}")
+        print("The database may need manual initialization")
+    
+    # Inicializar conexión de SQLAlchemy
+    try:
+        init_db()
+        print("Database connection pool initialized successfully")
+    except Exception as e:
+        print(f"Warning: Could not initialize database connection: {str(e)}")
+        print("Application will continue without database connection")
+>>>>>>> 125b786d3b1dd8f99495e4149cf969ee3116670b
         # Don't raise - allow app to start for development
     
     yield
@@ -137,12 +161,18 @@ app.include_router(products_router, tags=["products"])
 app.include_router(inventory_router, tags=["inventory"])
 app.include_router(carousel_router, tags=["carousel"])
 app.include_router(orders_router, tags=["orders"])
+app.include_router(orders_public_router, tags=["pedidos-public"])
 app.include_router(admin_users_router, tags=["admin-users"])
 app.include_router(home_products_router, tags=["home-products"])
+<<<<<<< HEAD
 # Public orders router for authenticated users
 app.include_router(public_orders.router, tags=["public-orders"])
+=======
+app.include_router(ratings_public_router, tags=["ratings"])
+app.include_router(ratings_admin_router, tags=["admin-ratings"])
+>>>>>>> 125b786d3b1dd8f99495e4149cf969ee3116670b
 
-# Public carousel router (frontend)
+# Public routers (frontend)
 from app.routers.carousel import public_router as carousel_public_router
 app.include_router(carousel_public_router)
 

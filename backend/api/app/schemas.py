@@ -98,10 +98,10 @@ class SubcategoriaUpdateRequest(BaseModel):
 # Response schemas
 class SubcategoriaResponse(BaseModel):
     id: int
-    categoria_id: int
+    categoria_id: Optional[int] = None
     nombre: str
-    created_at: datetime
-    updated_at: datetime
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
     
     class Config:
         from_attributes = True
@@ -110,8 +110,8 @@ class SubcategoriaResponse(BaseModel):
 class CategoriaResponse(BaseModel):
     id: int
     nombre: str
-    created_at: datetime
-    updated_at: datetime
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
     subcategorias: List[SubcategoriaResponse] = []
     
     class Config:
@@ -166,6 +166,7 @@ class ProductoUpdate(BaseModel):
     subcategoria_id: Optional[int] = None
     cantidad_disponible: Optional[int] = Field(None, ge=0)
     activo: Optional[bool] = None
+    imagenUrl: Optional[str] = None  # Support external image URL
 
 
 class ProductoResponse(BaseModel):
@@ -254,7 +255,11 @@ class CartResponse(BaseModel):
 # Order Schemas
 class PedidoCreate(BaseModel):
     direccion_entrega: str = Field(..., min_length=10)
+    municipio: Optional[str] = Field(None, max_length=100)
+    departamento: Optional[str] = Field(None, max_length=100)
+    pais: Optional[str] = Field('Colombia', max_length=100)
     telefono_contacto: str = Field(..., pattern=r"^\d{7,15}$")
+    metodo_pago: Optional[str] = Field('Efectivo', pattern=r"^(Tarjeta|Efectivo|Daviplata|Nequi|Addi|Sistecredito)$")
     nota_especial: Optional[str] = Field(None, max_length=500)
     usuario_id: int
     items: List[dict] = []
@@ -273,21 +278,30 @@ class PedidoItemResponse(BaseModel):
     producto_id: int
     cantidad: int
     precio_unitario: float
+    producto_nombre: Optional[str] = None
+    producto_imagen: Optional[str] = None
     
     class Config:
-        from_attributes = True
+        from_attributes = False  # Changed to False to allow dict construction
 
 
 class PedidoResponse(BaseModel):
     id: int
     usuario_id: int
+    clienteNombre: Optional[str] = None
     estado: str
     total: float
+    metodo_pago: Optional[str] = 'Efectivo'
+    direccion_entrega: str
+    municipio: Optional[str] = None
+    departamento: Optional[str] = None
+    pais: Optional[str] = 'Colombia'
+    telefono_contacto: str
     fecha_creacion: datetime
     items: List[PedidoItemResponse] = []
     
     class Config:
-        from_attributes = True
+        from_attributes = False  # Changed to False to allow dict construction
 
 
 # Carousel Schemas
@@ -304,14 +318,14 @@ class CarruselImagenUpdate(BaseModel):
 class CarruselImagenResponse(BaseModel):
     id: int
     orden: int
-    ruta_imagen: str = Field(..., alias="imagen_url")
+    imagen_url: str  # This will read from the 'imagen_url' property in the model
     link_url: Optional[str]
     activo: bool
-    fecha_creacion: datetime = Field(..., alias="created_at")
 
     class Config:
         # Allow reading from ORM attributes and populate by field name when needed
         from_attributes = True
+        populate_by_name = True
         allow_population_by_field_name = True
 
 
@@ -327,12 +341,17 @@ class UsuarioPublicResponse(BaseModel):
 
 class UsuarioDetailResponse(BaseModel):
     id: int
-    nombre_completo: str
+    nombreCompleto: str
     email: str
     cedula: str
-    fecha_registro: datetime
-    ultimo_login: Optional[datetime]
+    telefono: Optional[str] = None
+    direccionEnvio: Optional[str] = None
+    preferenciaMascotas: Optional[str] = None
+    fechaRegistro: datetime
+    ultimoLogin: Optional[datetime] = None
     rol: str
+    pedidosResumen: Optional[dict] = None
+    
     class Config:
         from_attributes = True
 
@@ -347,11 +366,11 @@ class ErrorDetailResponse(BaseModel):
 # --- Responses for HU_MANAGE_USERS ---
 class UsuarioListItem(BaseModel):
     id: int
-    nombre_completo: str
+    nombreCompleto: str
     cedula: Optional[str]
     email: str
-    direccion_envio: Optional[str]
-    fecha_registro: datetime
+    direccionEnvio: Optional[str]
+    fechaRegistro: datetime
 
     class Config:
         from_attributes = True
@@ -385,4 +404,60 @@ class PedidosListResponse(BaseModel):
     status: str = "success"
     data: List[PedidoResponse] = []
     meta: MetaPage
+
+
+# Rating Schemas
+class CalificacionCreate(BaseModel):
+    """Request schema for creating a rating"""
+    producto_id: int
+    pedido_id: int
+    calificacion: int = Field(..., ge=1, le=5)
+    comentario: Optional[str] = Field(None, max_length=500)
+
+
+class CalificacionUpdate(BaseModel):
+    """Request schema for updating a rating"""
+    calificacion: Optional[int] = Field(None, ge=1, le=5)
+    comentario: Optional[str] = Field(None, max_length=500)
+    visible: Optional[bool] = None
+    aprobado: Optional[bool] = None
+
+
+class CalificacionResponse(BaseModel):
+    id: int
+    producto_id: int
+    usuario_id: int
+    pedido_id: int
+    calificacion: int
+    comentario: Optional[str]
+    fecha_creacion: datetime
+    fecha_actualizacion: Optional[datetime]
+    aprobado: bool
+    visible: bool
+    usuario_nombre: Optional[str] = None
+    producto_nombre: Optional[str] = None
+    
+    class Config:
+        from_attributes = True
+
+
+class ProductoStatsResponse(BaseModel):
+    producto_id: int
+    promedio_calificacion: float
+    total_calificaciones: int
+    total_5_estrellas: int
+    total_4_estrellas: int
+    total_3_estrellas: int
+    total_2_estrellas: int
+    total_1_estrella: int
+    fecha_actualizacion: Optional[datetime]
+    
+    class Config:
+        from_attributes = True
+
+
+class CalificacionesListResponse(BaseModel):
+    status: str = "success"
+    data: List[CalificacionResponse] = []
+    meta: Optional[MetaPage] = None
 

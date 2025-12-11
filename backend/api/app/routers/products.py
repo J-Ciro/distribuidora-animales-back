@@ -185,6 +185,11 @@ async def create_product(
 
     if imagen_b64 and imagen_filename:
         message.update({"imagen_filename": imagen_filename, "imagen_b64": imagen_b64})
+    
+    # Support imagen_url from payload (external URL)
+    imagen_url = payload.get('imagenUrl') or payload.get('imagen_url')
+    if imagen_url and isinstance(imagen_url, str) and imagen_url.strip():
+        message["imagen_url"] = imagen_url.strip()
 
     # Publish message to RabbitMQ
     # AC5: Prevent duplicate product names (case-insensitive) at Producer level
@@ -530,6 +535,27 @@ async def update_product(
         producto['categoria'] = None
         producto['subcategoria'] = None
 
+    # Handle image changes
+    # If imagenUrl is provided (even if empty), handle image update/deletion
+    if 'imagenUrl' in data:
+        imagen_url = data.get('imagenUrl', '').strip() if data.get('imagenUrl') else ''
+        try:
+            # Always delete existing images first
+            db.execute(text("DELETE FROM ProductoImagenes WHERE producto_id = :id"), {"id": producto_id})
+            
+            # If a non-empty URL was provided, insert it
+            if imagen_url:
+                db.execute(text("INSERT INTO ProductoImagenes (producto_id, ruta_imagen, es_principal, orden) VALUES (:producto_id, :ruta_imagen, 1, 0)"), 
+                          {"producto_id": producto_id, "ruta_imagen": imagen_url})
+                logger.info(f"Updated product {producto_id} with imagen URL: {imagen_url}")
+            else:
+                logger.info(f"Removed all images for product {producto_id} (empty imagenUrl provided)")
+            
+            db.commit()
+        except Exception as e:
+            logger.exception(f"Error updating product image URL: {e}")
+            db.rollback()
+
     # Fetch images
     try:
         imgs = []
@@ -673,7 +699,14 @@ async def upload_product_image(
         logger.warning(f"Failed to publish productos.imagen.crear message for product {producto_id}, image {file_path}")
         # Not critical for upload success; return warning but 201
 
-    return JSONResponse(status_code=status.HTTP_201_CREATED, content={"status": "success", "message": "Imagen subida correctamente", "ruta": file_path})
+    # Generate public URL for the image (served via /app/uploads mount)
+    upload_dir = os.path.abspath(settings.UPLOAD_DIR)
+    relative_path = os.path.relpath(file_path, upload_dir)
+    # Convert Windows backslashes to forward slashes for URL
+    relative_path = relative_path.replace('\\', '/')
+    imagen_url = f"/app/uploads/{relative_path}"
+
+    return JSONResponse(status_code=status.HTTP_201_CREATED, content={"status": "success", "message": "Imagen subida correctamente", "ruta_imagen": file_path, "path": file_path, "imagen_url": imagen_url})
 
 
 @router.get("/{producto_id}/images")

@@ -1,4 +1,22 @@
 services:
+  # Database Migration Service
+  db-migrator:
+    image: mcr.microsoft.com/mssql-tools
+    container_name: distribuidora-db-migrator
+    depends_on:
+      sqlserver:
+        condition: service_healthy
+    environment:
+      - SA_PASSWORD=yourStrongPassword123#
+      - DB_SERVER=sqlserver
+      - DB_NAME=distribuidora_db
+    volumes:
+      - ./sql:/docker-entrypoint-initdb.d
+    command: ["/bin/bash", "/docker-entrypoint-initdb.d/init-db.sh"]
+    networks:
+      - distribuidora-network
+    restart: "no"  # Run once only
+
   api:
     build:
       context: .
@@ -24,7 +42,23 @@ services:
       - RABBITMQ_PORT=5672
       - RABBITMQ_USER=guest
       - RABBITMQ_PASSWORD=guest
+<<<<<<< HEAD
       - DEBUG=True
+=======
+      - SMTP_SERVER=smtp.gmail.com
+      - SMTP_PORT=587
+      - SMTP_USER=distribuidoraperrosgatos@gmail.com
+      - SMTP_PASSWORD=ximz ubff zigp wnxj
+      - EMAIL_FROM_NAME=Soft PetPlace
+      - EMAIL_FROM_ADDRESS=distribuidoraperrosgatos@gmail.com
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/docs", "||", "exit", "1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 40s
+    restart: unless-stopped
+>>>>>>> 125b786d3b1dd8f99495e4149cf969ee3116670b
     networks:
       - distribuidora-network
     volumes:
@@ -44,10 +78,13 @@ services:
         condition: service_completed_successfully
     environment:
       - RABBITMQ_URL=amqp://guest:guest@rabbitmq:5672/
-      - SMTP_HOST=email-smtp.<region>.amazonaws.com
+      - SMTP_HOST=smtp.gmail.com
       - SMTP_PORT=587
-      - SMTP_USER=AKIA4LK5VLMNEWTDJQVS
-      - SMTP_PASS=BHmouW5kBsfS7VtHFpk78UzcevCMFfSScvrBUWNHPHTP
+      - SMTP_USER=distribuidoraperrosgatos@gmail.com
+      - SMTP_PASS=ximz ubff zigp wnxj
+      - SMTP_PASSWORD=ximz ubff zigp wnxj
+      - EMAIL_FROM_NAME=Soft PetPlace
+      - EMAIL_FROM_ADDRESS=distribuidoraperrosgatos@gmail.com
       - DB_SERVER=sqlserver
       - DB_PORT=1433
       - DB_NAME=distribuidora_db
@@ -57,6 +94,7 @@ services:
       - RABBITMQ_PORT=5672
       - RABBITMQ_USER=guest
       - RABBITMQ_PASSWORD=guest
+    restart: unless-stopped
     networks:
       - distribuidora-network
 
@@ -71,6 +109,8 @@ services:
       interval: 30s
       timeout: 30s
       retries: 3
+      start_period: 60s
+    restart: unless-stopped
     networks:
       - distribuidora-network
 
@@ -102,6 +142,7 @@ services:
     networks:
       - distribuidora-network
 
+<<<<<<< HEAD
   db-migrator:
     image: mcr.microsoft.com/mssql-tools # This image contains sqlcmd
     container_name: distribuidora-db-migrator
@@ -135,6 +176,8 @@ services:
     networks:
       - distribuidora-network
 
+=======
+>>>>>>> 125b786d3b1dd8f99495e4149cf969ee3116670b
 volumes:
   sqlserver_data:
 
