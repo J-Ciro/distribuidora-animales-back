@@ -1,3 +1,10 @@
+# Quick Links
+
+- [Copilot Instructions](../copilot-instructions.md)
+- [Architecture](../ARCHITECTURE.md)
+- [Product](../PRODUCT.md)
+- [Contributing](../CONTRIBUTING.md)
+
 # Distribuidora Perros y Gatos - Backend
 
 Backend API for Distribuidora Perros y Gatos e-commerce platform - a multi-vendor platform for pet supplies (dogs and cats).
