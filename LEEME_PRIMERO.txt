@@ -1,0 +1,50 @@
+═══════════════════════════════════════════════════════════════════════════════
+  🚀 INSTALACIÓN RÁPIDA - Distribuidora Perros y Gatos
+═══════════════════════════════════════════════════════════════════════════════
+
+¿ACABAS DE CLONAR EL REPOSITORIO?
+
+Ejecuta este comando en PowerShell (como Administrador):
+
+    .\INSTALACION_COMPLETA.ps1
+
+Esto instalará AUTOMÁTICAMENTE:
+  ✅ Backend (Docker + Base de datos)
+  ✅ Frontend (React + dependencias)
+  ✅ Archivos .env necesarios
+  ✅ Migraciones de base de datos
+
+Tiempo estimado: 5-10 minutos
+
+═══════════════════════════════════════════════════════════════════════════════
+
+DESPUÉS DE LA INSTALACIÓN:
+
+1. Verifica que todo esté bien:
+   .\VERIFICAR_INSTALACION.ps1
+
+2. Inicia el frontend:
+   cd Distribuidora_Perros_Gatos_front
+   npm start
+
+3. Abre el navegador:
+   http://localhost:3000
+
+═══════════════════════════════════════════════════════════════════════════════
+
+¿PROBLEMAS? Lee estos archivos:
+
+  • AYUDA_RAPIDA.md                 - Soluciones rápidas
+  • SOLUCION_VARIABLES_ENTORNO.md   - Explicación detallada del problema
+  • README.md                        - Documentación completa
+
+═══════════════════════════════════════════════════════════════════════════════
+
+REQUISITOS:
+
+  ✓ Windows 10/11
+  ✓ Node.js v16+ (https://nodejs.org/)
+  ✓ Docker Desktop (https://www.docker.com/products/docker-desktop)
+  ✓ PowerShell 5.1+
+
+═══════════════════════════════════════════════════════════════════════════════
