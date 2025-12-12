@@ -226,7 +226,7 @@ Write-Host ""
 
 # Iniciar servicios
 Write-Host "  Iniciando servicios..." -ForegroundColor Cyan
-podman up -d --build
+podman compose up -d --build
 
 Write-Host "  [OK] Contenedores iniciados" -ForegroundColor Green
 Write-Host ""

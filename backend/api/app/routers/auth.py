@@ -26,12 +26,8 @@ from app.schemas import (
 from app.database import get_db
 from app.models import Usuario, VerificationCode, RefreshToken
 from app.utils import security_utils
-<<<<<<< HEAD
-from app.utils.rabbitmq import publish_message_safe
-=======
 from app.utils.rabbitmq import rabbitmq_producer
 from app.utils.email_service import email_service
->>>>>>> 125b786d3b1dd8f99495e4149cf969ee3116670b
 from app.config import settings
 
 logger = logging.getLogger(__name__)
@@ -129,19 +125,7 @@ async def register(request: RegisterRequest, db: Session = Depends(get_db)):
         verification_code = security_utils.generate_verification_code()
         code_hash = security_utils.hash_verification_code(verification_code)
         
-<<<<<<< HEAD
-        # Log verification code in development mode for testing
-        # Always log for now to help with debugging
-        logger.info(f"[DEV MODE] Verification code for {request.email}: {verification_code}")
-        logger.info(f"[DEV MODE] User can verify email at: POST /api/auth/verify-email with code: {verification_code}")
-        if settings.DEBUG:
-            logger.info(f"🔐 [DEV MODE] Verification code for {request.email}: {verification_code}")
-            logger.info(f"📧 [DEV MODE] User can verify email at: POST /api/auth/verify-email with code: {verification_code}")
-        
-        # 7. Create/update VerificationCodes with expires_at = now + 10 minutes
-=======
         # 7. Create VerificationCode with expires_at = now + 10 minutes
->>>>>>> 125b786d3b1dd8f99495e4149cf969ee3116670b
         expires_at = datetime.now(timezone.utc) + timedelta(minutes=settings.VERIFICATION_CODE_EXPIRE_MINUTES)
         
         # Invalidar códigos anteriores no usados
@@ -163,38 +147,7 @@ async def register(request: RegisterRequest, db: Session = Depends(get_db)):
         )
         db.add(verification_record)
         
-<<<<<<< HEAD
-        db.flush()
-        
-        # 8. Publish message to RabbitMQ queue expected by the worker: email.notifications
-        request_id = str(uuid.uuid4())
-        subject = "Verifica tu correo electrónico - Distribuidora Perros y Gatos"
-        message = {
-            "requestId": request_id,
-            "to": request.email,
-            "subject": subject,
-            "template": "verification",
-            "context": {
-                "name": request.nombre,
-                "code": verification_code,
-                "year": datetime.now().year,
-                "subject": subject
-            },
-            "timestamp": datetime.now(timezone.utc).isoformat()
-        }
-
-        # Publish email notification (non-blocking, won't fail registration)
-        published = publish_message_safe("email.notifications", message, retry=True)
-        if published:
-            logger.info(f"Published verification email message for user {nuevo_usuario.id}, requestId: {request_id}")
-        else:
-            logger.warning(f"Failed to publish verification email for user {nuevo_usuario.id}, requestId: {request_id}")
-            # Don't fail the registration if RabbitMQ is down; registration still succeeds
-        
-        # 9. Commit transaction
-=======
         # 8. Commit transaction
->>>>>>> 125b786d3b1dd8f99495e4149cf969ee3116670b
         db.commit()
         db.refresh(nuevo_usuario)
         
@@ -433,36 +386,6 @@ async def resend_code(request: ResendCodeRequest, db: Session = Depends(get_db))
             )
             db.add(verification_record)
         
-<<<<<<< HEAD
-        db.flush()
-        
-        # 7. Publish message to RabbitMQ queue expected by the worker: email.notifications
-        request_id = str(uuid.uuid4())
-        subject = "Verifica tu correo electrónico - Distribuidora Perros y Gatos"
-        message = {
-            "requestId": request_id,
-            "to": usuario.email,
-            "subject": subject,
-            "template": "verification",
-            "context": {
-                "name": usuario.nombre_completo,
-                "code": verification_code,
-                "year": datetime.now().year,
-                "subject": subject
-            },
-            "timestamp": datetime.now(timezone.utc).isoformat()
-        }
-
-        # Publish email notification (non-blocking)
-        published = publish_message_safe("email.notifications", message, retry=True)
-        if published:
-            logger.info(f"Published resend verification email for user {usuario.id}, requestId: {request_id}")
-        else:
-            logger.warning(f"Failed to publish resend verification email for user {usuario.id}, requestId: {request_id}")
-            # Don't fail the resend if RabbitMQ is down
-        
-=======
->>>>>>> 125b786d3b1dd8f99495e4149cf969ee3116670b
         db.commit()
         db.refresh(verification_record)
         

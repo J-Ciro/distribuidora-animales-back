@@ -77,24 +77,6 @@ def _pedido_to_response(db, pedido: models.Pedido):
     return {
         "id": pedido.id,
         "usuario_id": pedido.usuario_id,
-<<<<<<< HEAD
-        "clienteId": cliente_id,
-        "cliente_id": cliente_id,
-        "clienteNombre": cliente_nombre,
-        "cliente_nombre": cliente_nombre,
-        "estado": pedido.estado,
-        "total": float(pedido.total),
-        "subtotal": float(pedido.subtotal) if hasattr(pedido, 'subtotal') and pedido.subtotal else float(pedido.total),
-        "costo_envio": float(pedido.costo_envio) if hasattr(pedido, 'costo_envio') and pedido.costo_envio else 0.0,
-        "metodo_pago": pedido.metodo_pago if hasattr(pedido, 'metodo_pago') else None,
-        "direccion_entrega": pedido.direccion_entrega,
-        "direccionEnvio": pedido.direccion_entrega,  # Alias for frontend compatibility
-        "telefono_contacto": pedido.telefono_contacto,
-        "nota_especial": pedido.nota_especial,
-        "fecha_creacion": fecha_creacion_str,
-        "fecha": fecha_creacion_str,  # Alias for frontend compatibility
-        "created_at": fecha_creacion_str,  # Another alias
-=======
         "clienteNombre": cliente_nombre,
         "estado": pedido.estado,
         "total": float(pedido.total),
@@ -105,7 +87,6 @@ def _pedido_to_response(db, pedido: models.Pedido):
         "pais": pedido.pais or 'Colombia',
         "telefono_contacto": pedido.telefono_contacto,
         "fecha_creacion": pedido.fecha_creacion,
->>>>>>> 125b786d3b1dd8f99495e4149cf969ee3116670b
         "items": items_resp,
     }
 
