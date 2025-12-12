@@ -204,7 +204,7 @@ async def create_product(
         return JSONResponse(status_code=status.HTTP_400_BAD_REQUEST, content={"status": "error", "message": "Ya existe un producto con ese nombre."})
 
     # Publish to RabbitMQ (connection is persistent, no need to close)
-    published = rabbitmq_producer.publish(queue_name="productos.crear", message=message, retry=True)
+    published = publish_message_safe("productos.crear", message, retry=True)
     if not published:
         logger.error(f"Failed to publish message to productos.crear after retries. Message: {message}")
         # Don't fail the request, but log the error
