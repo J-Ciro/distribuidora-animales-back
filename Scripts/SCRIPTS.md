@@ -38,13 +38,13 @@ Este documento describe todos los scripts disponibles para facilitar la instalac
 
 **Backend:**
 ```powershell
-cd Distribuidora_Perros_Gatos_back
+cd distribuidora-animales-back
 .\INSTALL.ps1
 ```
 
 **Frontend:**
 ```powershell
-cd Distribuidora_Perros_Gatos_front
+cd distribuidora-animales-front
 .\INSTALL.ps1
 ```
 
@@ -131,8 +131,8 @@ cd Distribuidora_Perros_Gatos_front
 
 ```powershell
 # 1. Clonar repositorios
-git clone <url-backend> Distribuidora_Perros_Gatos_back
-git clone <url-frontend> Distribuidora_Perros_Gatos_front
+git clone <url-backend> distribuidora-animales-back
+git clone <url-frontend> distribuidora-animales-front
 
 # 2. Ejecutar instalación completa
 .\SETUP-COMPLETO.ps1
@@ -170,11 +170,11 @@ git clone <url-frontend> Distribuidora_Perros_Gatos_front
 # 2. Si hay problemas, reinstalar componente específico:
 
 # Backend
-cd Distribuidora_Perros_Gatos_back
+cd distribuidora-animales-back
 .\INSTALL.ps1
 
 # Frontend
-cd Distribuidora_Perros_Gatos_front
+cd distribuidora-animales-front
 .\INSTALL.ps1
 
 # 3. Reiniciar todo
@@ -191,7 +191,7 @@ cd Distribuidora_Perros_Gatos_front
 .\STOP.ps1
 
 # Limpiar Docker
-cd Distribuidora_Perros_Gatos_back
+cd distribuidora-animales-back
 docker-compose down -v  # -v elimina volúmenes (¡CUIDADO! borra datos)
 
 # Reinstalar
@@ -241,7 +241,7 @@ docker-compose up -d
 
 ### Desarrollo
 ```powershell
-cd Distribuidora_Perros_Gatos_front
+cd distribuidora-animales-front
 npm start
 ```
 
@@ -271,10 +271,10 @@ MariaPaulaRama/
 ├── CONFIGURACION.md        # Configuraciones del proyecto
 ├── SCRIPTS.md              # Este archivo
 │
-├── Distribuidora_Perros_Gatos_back/
+├── distribuidora-animales-back/
 │   └── INSTALL.ps1         # Instalación del backend
 │
-└── Distribuidora_Perros_Gatos_front/
+└── distribuidora-animales-front/
     └── INSTALL.ps1         # Instalación del frontend
 ```
 
@@ -348,8 +348,8 @@ docker-compose logs -f sqlserver
 
 ## 📖 Documentación Adicional
 
-- **Arquitectura Backend:** `Distribuidora_Perros_Gatos_back/ARCHITECTURE.md`
-- **Arquitectura Frontend:** `Distribuidora_Perros_Gatos_front/ARCHITECTURE.md`
+- **Arquitectura Backend:** `distribuidora-animales-back/ARCHITECTURE.md`
+- **Arquitectura Frontend:** `distribuidora-animales-front/ARCHITECTURE.md`
 - **API Docs:** http://localhost:8000/docs (cuando esté corriendo)
 
 ---

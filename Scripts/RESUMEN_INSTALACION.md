@@ -15,12 +15,12 @@ Se ha creado un **sistema completo de instalación y gestión automatizada** par
    - Verificación automática de todo el sistema
    - Tiempo: ~10 minutos
 
-2. **`Distribuidora_Perros_Gatos_back/INSTALL.ps1`**
+2. **`distribuidora-animales-back/INSTALL.ps1`**
    - Instalación automatizada del backend con Docker
    - Verifica Docker, construye imágenes, inicia servicios
    - Aplica schema de base de datos
 
-3. **`Distribuidora_Perros_Gatos_front/INSTALL.ps1`**
+3. **`distribuidora-animales-front/INSTALL.ps1`**
    - Instalación automatizada del frontend React
    - Verifica Node.js, crea .env, instala dependencias
 
@@ -142,13 +142,13 @@ MariaPaulaRama/
 ├── 📖 CONFIGURACION.md           Configuraciones
 ├── 📖 POST-INSTALACION.md        Checklist post-instalación
 │
-├── Distribuidora_Perros_Gatos_back/
+├── distribuidora-animales-back/
 │   ├── INSTALL.ps1              ⚙️ Instalador backend
 │   ├── docker-compose.yml       ✅ Mejorado con healthchecks
 │   ├── .gitignore               ✅ Actualizado
 │   └── ... (código backend)
 │
-└── Distribuidora_Perros_Gatos_front/
+└── distribuidora-animales-front/
     ├── INSTALL.ps1              ⚙️ Instalador frontend
     ├── .env                     📝 Auto-generado
     ├── .env.example             📝 Template

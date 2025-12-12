@@ -68,29 +68,29 @@ Guía completa de toda la documentación disponible del proyecto.
 
 ### Backend
 
-8. **[Distribuidora_Perros_Gatos_back/README_BACKEND.md](Distribuidora_Perros_Gatos_back/README_BACKEND.md)**
+8. **[distribuidora-animales-back/README_BACKEND.md](distribuidora-animales-back/README_BACKEND.md)**
    - Documentación específica del backend
    - Estructura del código
    - Endpoints de API
 
-9. **[Distribuidora_Perros_Gatos_back/ARCHITECTURE.md](Distribuidora_Perros_Gatos_back/ARCHITECTURE.md)**
+9. **[distribuidora-animales-back/ARCHITECTURE.md](distribuidora-animales-back/ARCHITECTURE.md)**
    - Arquitectura del backend
    - Patrones de diseño
    - Flujo de datos
 
-10. **[Distribuidora_Perros_Gatos_back/docker-compose.yml](Distribuidora_Perros_Gatos_back/docker-compose.yml)**
+10. **[distribuidora-animales-back/docker-compose.yml](distribuidora-animales-back/docker-compose.yml)**
     - Configuración de servicios Docker
     - Variables de entorno
     - Healthchecks
 
 ### Frontend
 
-11. **[Distribuidora_Perros_Gatos_front/README.md](Distribuidora_Perros_Gatos_front/README.md)**
+11. **[distribuidora-animales-front/README.md](distribuidora-animales-front/README.md)**
     - Documentación específica del frontend
     - Estructura de componentes
     - Estado de Redux
 
-12. **[Distribuidora_Perros_Gatos_front/ARCHITECTURE.md](Distribuidora_Perros_Gatos_front/ARCHITECTURE.md)**
+12. **[distribuidora-animales-front/ARCHITECTURE.md](distribuidora-animales-front/ARCHITECTURE.md)**
     - Arquitectura del frontend
     - Gestión de estado
     - Routing
@@ -126,11 +126,11 @@ Guía completa de toda la documentación disponible del proyecto.
     - Antes vs Ahora
     - Impacto del sistema de instalación
 
-14. **[PROJECT_SUMMARY.md](Distribuidora_Perros_Gatos_front/PROJECT_SUMMARY.md)**
+14. **[PROJECT_SUMMARY.md](distribuidora-animales-front/PROJECT_SUMMARY.md)**
     - Resumen del proyecto frontend
     - Decisiones de diseño
 
-15. **[PROJECT_STATUS.md](Distribuidora_Perros_Gatos_back/PROJECT_STATUS.md)**
+15. **[PROJECT_STATUS.md](distribuidora-animales-back/PROJECT_STATUS.md)**
     - Estado del proyecto backend
     - Funcionalidades completadas
 
@@ -219,14 +219,14 @@ Documentación: [CONFIGURACION.md](CONFIGURACION.md)
 ### Desarrollando (Día 2+)
 
 1. [SCRIPTS.md](SCRIPTS.md) - Comandos diarios
-2. [ARCHITECTURE.md](Distribuidora_Perros_Gatos_back/ARCHITECTURE.md) - Entender el backend
-3. [ARCHITECTURE.md](Distribuidora_Perros_Gatos_front/ARCHITECTURE.md) - Entender el frontend
+2. [ARCHITECTURE.md](distribuidora-animales-back/ARCHITECTURE.md) - Entender el backend
+3. [ARCHITECTURE.md](distribuidora-animales-front/ARCHITECTURE.md) - Entender el frontend
 4. Historias de Usuario (HU/) - Según lo que desarrolles
 
 ### Personalizando
 
 1. [CONFIGURACION.md](CONFIGURACION.md) - Configuraciones
-2. [docker-compose.yml](Distribuidora_Perros_Gatos_back/docker-compose.yml) - Services
+2. [docker-compose.yml](distribuidora-animales-back/docker-compose.yml) - Services
 3. `.env` files - Variables de entorno
 
 ### Solucionando Problemas

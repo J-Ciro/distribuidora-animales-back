@@ -21,17 +21,17 @@ Si es tu primera vez clonando el repositorio, sigue estos pasos:
 2. **Clonar y configurar**:
    ```powershell
    # Clonar el repositorio backend
-   git clone https://github.com/julianrodriguez-Sofka/Distribuidora_Perros_Gatos_back.git
-   cd Distribuidora_Perros_Gatos_back
+   git clone https://github.com/julianrodriguez-Sofka/distribuidora-animales-back.git
+   cd distribuidora-animales-back
    
    # Clonar el repositorio frontend (en otra carpeta)
    cd ..
-   git clone https://github.com/<tu-org>/Distribuidora_Perros_Gatos_front.git
+   git clone https://github.com/<tu-org>/distribuidora-animales-front.git
    ```
 
 3. **Ejecutar scripts de instalación** (Backend):
    ```powershell
-   cd Distribuidora_Perros_Gatos_back
+   cd distribuidora-animales-back
    
    # Paso 1: Corregir archivos de migración (solo primera vez)
    .\fix-migrations.ps1
@@ -42,7 +42,7 @@ Si es tu primera vez clonando el repositorio, sigue estos pasos:
 
 4. **Configurar Frontend**:
    ```powershell
-   cd ..\Distribuidora_Perros_Gatos_front
+   cd ..\distribuidora-animales-front
    
    # Instalar dependencias
    npm install

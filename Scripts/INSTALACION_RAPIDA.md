@@ -20,17 +20,17 @@ Este proyecto incluye scripts automatizados para facilitar la instalación y con
 ```powershell
 # Clonar el repositorio backend
 git clone <url-del-repositorio-backend>
-cd Distribuidora_Perros_Gatos_back
+cd distribuidora-animales-back
 
 # Clonar el repositorio frontend (en otra carpeta)
 git clone <url-del-repositorio-frontend>
-cd Distribuidora_Perros_Gatos_front
+cd distribuidora-animales-front
 ```
 
 ### 2️⃣ Instalar Backend (Docker)
 
 ```powershell
-cd Distribuidora_Perros_Gatos_back
+cd distribuidora-animales-back
 .\INSTALL.ps1
 ```
 
@@ -46,7 +46,7 @@ cd Distribuidora_Perros_Gatos_back
 ### 3️⃣ Instalar Frontend (React)
 
 ```powershell
-cd Distribuidora_Perros_Gatos_front
+cd distribuidora-animales-front
 .\INSTALL.ps1
 ```
 
@@ -61,7 +61,7 @@ cd Distribuidora_Perros_Gatos_front
 ### 4️⃣ Iniciar la Aplicación
 
 ```powershell
-# En Distribuidora_Perros_Gatos_front
+# En distribuidora-animales-front
 npm start
 ```
 
@@ -237,7 +237,7 @@ Get-Process -Id (Get-NetTCPConnection -LocalPort 3000).OwningProcess | Stop-Proc
 ## 📊 Estructura del Proyecto
 
 ```
-Distribuidora_Perros_Gatos_back/
+distribuidora-animales-back/
 ├── INSTALL.ps1                 # Script de instalación automática ⭐
 ├── docker-compose.yml          # Configuración de servicios
 ├── Dockerfile.api              # Imagen del API
@@ -248,7 +248,7 @@ Distribuidora_Perros_Gatos_back/
     ├── api/                    # FastAPI Backend
     └── worker/                 # Worker de emails
 
-Distribuidora_Perros_Gatos_front/
+distribuidora-animales-front/
 ├── INSTALL.ps1                 # Script de instalación automática ⭐
 ├── package.json                # Dependencias npm
 ├── .env                        # Configuración (auto-generado)

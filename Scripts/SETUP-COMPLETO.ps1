@@ -45,7 +45,7 @@ if (-not $SkipBackend) {
     Write-Host "═══════════════════════════════════════════════════════" -ForegroundColor Cyan
     Write-Host ""
     
-    $backendPath = Join-Path $scriptPath "Distribuidora_Perros_Gatos_back"
+    $backendPath = Join-Path $scriptPath "distribuidora-animales-back"
     
     if (-not (Test-Path $backendPath)) {
         Write-Host "✗ Error: No se encontró la carpeta del backend" -ForegroundColor Red
@@ -80,7 +80,7 @@ if (-not $SkipFrontend) {
     Write-Host "═══════════════════════════════════════════════════════" -ForegroundColor Cyan
     Write-Host ""
     
-    $frontendPath = Join-Path $scriptPath "Distribuidora_Perros_Gatos_front"
+    $frontendPath = Join-Path $scriptPath "distribuidora-animales-front"
     
     if (-not (Test-Path $frontendPath)) {
         Write-Host "✗ Error: No se encontró la carpeta del frontend" -ForegroundColor Red
@@ -141,7 +141,7 @@ Write-Host "1. Iniciar la aplicación:" -ForegroundColor Cyan
 Write-Host "   .\START.ps1" -ForegroundColor White
 Write-Host ""
 Write-Host "   O manualmente:" -ForegroundColor DarkGray
-Write-Host "   cd Distribuidora_Perros_Gatos_front" -ForegroundColor DarkGray
+Write-Host "   cd distribuidora-animales-front" -ForegroundColor DarkGray
 Write-Host "   npm start" -ForegroundColor DarkGray
 Write-Host ""
 Write-Host "2. Acceder a la aplicación:" -ForegroundColor Cyan

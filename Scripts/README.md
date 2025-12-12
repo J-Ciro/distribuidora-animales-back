@@ -26,15 +26,15 @@ Sistema de e-commerce completo para venta de productos para mascotas, desarrolla
 
 ```powershell
 # 1. Clonar repositorios (ajusta las URLs según tu repositorio)
-git clone <url-backend> Distribuidora_Perros_Gatos_back
-git clone <url-frontend> Distribuidora_Perros_Gatos_front
+git clone <url-backend> distribuidora-animales-back
+git clone <url-frontend> distribuidora-animales-front
 
 # 2. Instalar Backend (Docker - 3-5 minutos)
-cd Distribuidora_Perros_Gatos_back
+cd distribuidora-animales-back
 .\INSTALL.ps1
 
 # 3. Instalar Frontend (React - 2-3 minutos)
-cd ..\Distribuidora_Perros_Gatos_front
+cd ..\distribuidora-animales-front
 .\INSTALL.ps1
 
 # 4. Iniciar aplicación
@@ -149,7 +149,7 @@ El proyecto incluye scripts que automatizan completamente la instalación y gest
 ## 📁 Estructura del Proyecto
 
 ```
-Distribuidora_Perros_Gatos_back/
+distribuidora-animales-back/
 ├── INSTALL.ps1              # ⭐ Script de instalación automática
 ├── docker-compose.yml       # Orquestación de servicios
 ├── backend/
@@ -159,7 +159,7 @@ Distribuidora_Perros_Gatos_back/
     ├── schema.sql           # Schema de base de datos
     └── migrations/          # Migraciones
 
-Distribuidora_Perros_Gatos_front/
+distribuidora-animales-front/
 ├── INSTALL.ps1              # ⭐ Script de instalación automática
 ├── src/
 │   ├── components/          # Componentes React
@@ -261,8 +261,8 @@ npm test
 
 - **API Docs:** http://localhost:8000/docs (Swagger UI)
 - **Guía de Instalación:** [INSTALACION_RAPIDA.md](../INSTALACION_RAPIDA.md)
-- **Arquitectura Backend:** [ARCHITECTURE.md](Distribuidora_Perros_Gatos_back/ARCHITECTURE.md)
-- **Arquitectura Frontend:** [ARCHITECTURE.md](Distribuidora_Perros_Gatos_front/ARCHITECTURE.md)
+- **Arquitectura Backend:** [ARCHITECTURE.md](distribuidora-animales-back/ARCHITECTURE.md)
+- **Arquitectura Frontend:** [ARCHITECTURE.md](distribuidora-animales-front/ARCHITECTURE.md)
 
 ## 🐛 Solución de Problemas
 

@@ -47,7 +47,7 @@ function Test-FrontendRunning {
 if (-not $FrontendOnly) {
     Write-Host "[Backend] Verificando estado..." -ForegroundColor Yellow
     
-    $backendPath = Join-Path $scriptPath "Distribuidora_Perros_Gatos_back"
+    $backendPath = Join-Path $scriptPath "distribuidora-animales-back"
     
     if (-not (Test-Path $backendPath)) {
         Write-Host "✗ No se encontró la carpeta del backend en: $backendPath" -ForegroundColor Red
@@ -101,7 +101,7 @@ if (-not $FrontendOnly) {
 if (-not $BackendOnly) {
     Write-Host "[Frontend] Verificando estado..." -ForegroundColor Yellow
     
-    $frontendPath = Join-Path $scriptPath "Distribuidora_Perros_Gatos_front"
+    $frontendPath = Join-Path $scriptPath "distribuidora-animales-front"
     
     if (-not (Test-Path $frontendPath)) {
         Write-Host "✗ No se encontró la carpeta del frontend en: $frontendPath" -ForegroundColor Red

@@ -61,7 +61,7 @@ La arquitectura del backend de **Distribuidora Perros y Gatos** utiliza un model
 ## 📁 Estructura de Carpetas
 
 ```
-Distribuidora_Perros_Gatos_back/
+distribuidora-animales-back/
 │
 ├── HU/                                  # Historias de Usuario - Instrucciones técnicas
 │   ├── INSTRUCTIONS_HU_CREATE_PRODUCT.md

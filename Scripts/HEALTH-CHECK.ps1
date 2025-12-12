@@ -132,7 +132,7 @@ Write-Host ""
 
 # 7. Verificar Frontend
 Write-Host "[7/7] Verificando Frontend..." -ForegroundColor Yellow
-$frontendPath = Join-Path $scriptPath "Distribuidora_Perros_Gatos_front"
+$frontendPath = Join-Path $scriptPath "distribuidora-animales-front"
 
 if (Test-Path $frontendPath) {
     # Verificar que node_modules existe
@@ -141,7 +141,7 @@ if (Test-Path $frontendPath) {
         Write-Host "✓ Dependencias de npm instaladas" -ForegroundColor Green
     } else {
         Write-Host "⚠ Dependencias de npm no instaladas" -ForegroundColor Yellow
-        Write-Host "  Ejecuta: cd Distribuidora_Perros_Gatos_front; .\INSTALL.ps1" -ForegroundColor DarkGray
+        Write-Host "  Ejecuta: cd distribuidora-animales-front; .\INSTALL.ps1" -ForegroundColor DarkGray
     }
     
     # Verificar .env
@@ -158,7 +158,7 @@ if (Test-Path $frontendPath) {
         }
     } else {
         Write-Host "⚠ Archivo .env no existe" -ForegroundColor Yellow
-        Write-Host "  Ejecuta: cd Distribuidora_Perros_Gatos_front; .\INSTALL.ps1" -ForegroundColor DarkGray
+        Write-Host "  Ejecuta: cd distribuidora-animales-front; .\INSTALL.ps1" -ForegroundColor DarkGray
     }
     
     # Verificar si está corriendo
@@ -168,11 +168,11 @@ if (Test-Path $frontendPath) {
             Write-Host "✓ Frontend corriendo en http://localhost:3000" -ForegroundColor Green
         } else {
             Write-Host "⚠ Frontend no está corriendo" -ForegroundColor Yellow
-            Write-Host "  Ejecuta: cd Distribuidora_Perros_Gatos_front; npm start" -ForegroundColor DarkGray
+            Write-Host "  Ejecuta: cd distribuidora-animales-front; npm start" -ForegroundColor DarkGray
         }
     } catch {
         Write-Host "⚠ Frontend no está corriendo" -ForegroundColor Yellow
-        Write-Host "  Ejecuta: cd Distribuidora_Perros_Gatos_front; npm start" -ForegroundColor DarkGray
+        Write-Host "  Ejecuta: cd distribuidora-animales-front; npm start" -ForegroundColor DarkGray
     }
 } else {
     Write-Host "✗ Carpeta del frontend no encontrada" -ForegroundColor Red
@@ -192,11 +192,11 @@ if ($allHealthy) {
     Write-Host ""
     Write-Host "Acciones recomendadas:" -ForegroundColor Yellow
     Write-Host "1. Si el backend tiene problemas:" -ForegroundColor White
-    Write-Host "   cd Distribuidora_Perros_Gatos_back" -ForegroundColor DarkGray
+    Write-Host "   cd distribuidora-animales-back" -ForegroundColor DarkGray
     Write-Host "   .\INSTALL.ps1" -ForegroundColor DarkGray
     Write-Host ""
     Write-Host "2. Si el frontend tiene problemas:" -ForegroundColor White
-    Write-Host "   cd Distribuidora_Perros_Gatos_front" -ForegroundColor DarkGray
+    Write-Host "   cd distribuidora-animales-front" -ForegroundColor DarkGray
     Write-Host "   .\INSTALL.ps1" -ForegroundColor DarkGray
     Write-Host ""
     Write-Host "3. Ver logs de Docker:" -ForegroundColor White

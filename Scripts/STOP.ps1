@@ -13,7 +13,7 @@ Write-Host "========================================" -ForegroundColor Cyan
 Write-Host ""
 
 $scriptPath = Split-Path -Parent $MyInvocation.MyCommand.Path
-$backendPath = Join-Path $scriptPath "Distribuidora_Perros_Gatos_back"
+$backendPath = Join-Path $scriptPath "distribuidora-animales-back"
 
 # Detener Backend (Docker)
 Write-Host "[1/2] Deteniendo servicios Docker..." -ForegroundColor Yellow

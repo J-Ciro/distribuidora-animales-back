@@ -79,7 +79,7 @@ Write-Host "  FASE 2: Configurando Backend" -ForegroundColor Yellow
 Write-Host "========================================" -ForegroundColor Yellow
 Write-Host ""
 
-Set-Location "$rootDir\Distribuidora_Perros_Gatos_back"
+Set-Location "$rootDir\distribuidora-animales-back"
 
 # Crear archivos .env desde .env.example
 Write-Host "[1/5] Configurando variables de entorno..." -ForegroundColor Cyan
@@ -189,7 +189,7 @@ Write-Host "  FASE 3: Configurando Frontend" -ForegroundColor Yellow
 Write-Host "========================================" -ForegroundColor Yellow
 Write-Host ""
 
-Set-Location "$rootDir\Distribuidora_Perros_Gatos_front"
+Set-Location "$rootDir\distribuidora-animales-front"
 
 # Crear archivo .env
 Write-Host "[1/2] Configurando variables de entorno..." -ForegroundColor Cyan
@@ -250,16 +250,16 @@ Write-Host ""
 Write-Host "🚀 PARA INICIAR EL SISTEMA:" -ForegroundColor Yellow
 Write-Host ""
 Write-Host "  Backend (ya está corriendo):" -ForegroundColor Cyan
-Write-Host "    cd Distribuidora_Perros_Gatos_back" -ForegroundColor White
+Write-Host "    cd distribuidora-animales-back" -ForegroundColor White
 Write-Host "    docker-compose ps                    # Ver estado" -ForegroundColor DarkGray
 Write-Host ""
 Write-Host "  Frontend:" -ForegroundColor Cyan
-Write-Host "    cd Distribuidora_Perros_Gatos_front" -ForegroundColor White
+Write-Host "    cd distribuidora-animales-front" -ForegroundColor White
 Write-Host "    npm start                            # Iniciar aplicación" -ForegroundColor White
 Write-Host ""
 
 Write-Host "📊 ESTADO ACTUAL DE CONTENEDORES:" -ForegroundColor Cyan
-Set-Location "$rootDir\Distribuidora_Perros_Gatos_back"
+Set-Location "$rootDir\distribuidora-animales-back"
 docker ps --filter "name=distribuidora" --filter "name=sqlserver" --filter "name=rabbitmq" --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
 Write-Host ""
 
@@ -286,13 +286,13 @@ if ($startFrontend -eq "s" -or $startFrontend -eq "S") {
     Write-Host "La aplicación se abrirá en http://localhost:3000" -ForegroundColor Cyan
     Write-Host "Presiona Ctrl+C para detener" -ForegroundColor Yellow
     Write-Host ""
-    Set-Location "$rootDir\Distribuidora_Perros_Gatos_front"
+    Set-Location "$rootDir\distribuidora-animales-front"
     npm start
 } else {
     Write-Host ""
     Write-Host "✓ Sistema instalado y backend corriendo" -ForegroundColor Green
     Write-Host "Para iniciar el frontend:" -ForegroundColor Cyan
-    Write-Host "  cd Distribuidora_Perros_Gatos_front" -ForegroundColor White
+    Write-Host "  cd distribuidora-animales-front" -ForegroundColor White
     Write-Host "  npm start" -ForegroundColor White
     Write-Host ""
 }

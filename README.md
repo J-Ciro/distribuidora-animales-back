@@ -214,7 +214,7 @@ Backend API for Distribuidora Perros y Gatos e-commerce platform - a multi-vendo
 ```powershell
 # 1. Clonar el repositorio
 git clone <url-del-repositorio>
-cd Distribuidora_Perros_Gatos_back
+cd distribuidora-animales-back
 
 # 2. Ejecutar script de corrección de migraciones
 .\fix-migrations.ps1

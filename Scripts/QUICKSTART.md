@@ -4,8 +4,8 @@
 
 ```powershell
 # 1. Clonar (si aún no lo has hecho)
-git clone <url-backend> Distribuidora_Perros_Gatos_back
-git clone <url-frontend> Distribuidora_Perros_Gatos_front
+git clone <url-backend> distribuidora-animales-back
+git clone <url-frontend> distribuidora-animales-front
 
 # 2. Instalar TODOOO automáticamente
 .\SETUP-COMPLETO.ps1

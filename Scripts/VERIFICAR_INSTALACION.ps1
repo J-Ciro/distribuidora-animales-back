@@ -89,12 +89,12 @@ Write-Host "[2/8] Verificando Estructura de Directorios..." -ForegroundColor Yel
 Write-Host ""
 
 $requiredDirs = @(
-    "Distribuidora_Perros_Gatos_back",
-    "Distribuidora_Perros_Gatos_front",
-    "Distribuidora_Perros_Gatos_back\backend\api",
-    "Distribuidora_Perros_Gatos_back\backend\worker",
-    "Distribuidora_Perros_Gatos_front\src",
-    "Distribuidora_Perros_Gatos_front\public"
+    "distribuidora-animales-back",
+    "distribuidora-animales-front",
+    "distribuidora-animales-back\backend\api",
+    "distribuidora-animales-back\backend\worker",
+    "distribuidora-animales-front\src",
+    "distribuidora-animales-front\public"
 )
 
 foreach ($dir in $requiredDirs) {
@@ -116,9 +116,9 @@ Write-Host "[3/8] Verificando Plantillas .env.example..." -ForegroundColor Yello
 Write-Host ""
 
 $envExamples = @(
-    "Distribuidora_Perros_Gatos_front\.env.example",
-    "Distribuidora_Perros_Gatos_back\backend\api\.env.example",
-    "Distribuidora_Perros_Gatos_back\backend\worker\.env.example"
+    "distribuidora-animales-front\.env.example",
+    "distribuidora-animales-back\backend\api\.env.example",
+    "distribuidora-animales-back\backend\worker\.env.example"
 )
 
 foreach ($envFile in $envExamples) {
@@ -140,9 +140,9 @@ Write-Host "[4/8] Verificando Archivos .env (creados por instalación)..." -Fore
 Write-Host ""
 
 $envFiles = @(
-    "Distribuidora_Perros_Gatos_front\.env",
-    "Distribuidora_Perros_Gatos_back\backend\api\.env",
-    "Distribuidora_Perros_Gatos_back\backend\worker\.env"
+    "distribuidora-animales-front\.env",
+    "distribuidora-animales-back\backend\api\.env",
+    "distribuidora-animales-back\backend\worker\.env"
 )
 
 foreach ($envFile in $envFiles) {
@@ -165,7 +165,7 @@ Write-Host ""
 
 $containers = @("sqlserver", "rabbitmq", "distribuidora-api", "distribuidora-worker")
 
-Set-Location "$rootDir\Distribuidora_Perros_Gatos_back" -ErrorAction SilentlyContinue
+Set-Location "$rootDir\distribuidora-animales-back" -ErrorAction SilentlyContinue
 
 foreach ($container in $containers) {
     Write-Host "  $container :" -NoNewline
@@ -196,7 +196,7 @@ Write-Host ""
 Write-Host "[6/8] Verificando Dependencias del Frontend..." -ForegroundColor Yellow
 Write-Host ""
 
-Set-Location "$rootDir\Distribuidora_Perros_Gatos_front" -ErrorAction SilentlyContinue
+Set-Location "$rootDir\distribuidora-animales-front" -ErrorAction SilentlyContinue
 
 Write-Host "  node_modules:" -NoNewline
 if (Test-Path "node_modules") {
@@ -315,7 +315,7 @@ if ($errorsFound -eq 0 -and $warningsFound -eq 0) {
     Write-Host ""
     Write-Host "El sistema está listo para usar:" -ForegroundColor White
     Write-Host "  • Backend: http://localhost:8000" -ForegroundColor Cyan
-    Write-Host "  • Frontend: ejecuta 'npm start' en Distribuidora_Perros_Gatos_front" -ForegroundColor Cyan
+    Write-Host "  • Frontend: ejecuta 'npm start' en distribuidora-animales-front" -ForegroundColor Cyan
 } elseif ($errorsFound -eq 0) {
     Write-Host "✓ INSTALACIÓN COMPLETA CON ADVERTENCIAS" -ForegroundColor Yellow
     Write-Host ""
