@@ -1,22 +1,4 @@
 services:
-  # Database Migration Service
-  db-migrator:
-    image: mcr.microsoft.com/mssql-tools:latest
-    container_name: distribuidora-db-migrator
-    depends_on:
-      sqlserver:
-        condition: service_healthy
-    environment:
-      - SA_PASSWORD=yourStrongPassword123#
-      - DB_SERVER=sqlserver
-      - DB_NAME=distribuidora_db
-    volumes:
-      - ./sql:/docker-entrypoint-initdb.d
-    command: ["/bin/bash", "/docker-entrypoint-initdb.d/init-db.sh"]
-    networks:
-      - distribuidora-network
-    restart: "no"  # Run once only
-
   api:
     build:
       context: .
@@ -29,8 +11,6 @@ services:
         condition: service_healthy
       sqlserver:
         condition: service_healthy
-      db-migrator:
-        condition: service_completed_successfully
     environment:
       - RABBITMQ_URL=amqp://guest:guest@rabbitmq:5672/
       - DB_SERVER=sqlserver
@@ -48,12 +28,15 @@ services:
       - SMTP_PASSWORD=ximz ubff zigp wnxj
       - EMAIL_FROM_NAME=Soft PetPlace
       - EMAIL_FROM_ADDRESS=distribuidoraperrosgatos@gmail.com
+      - ADMIN_EMAIL=admin@gmail.com
+      - ADMIN_PASSWORD=Admin123!@#
+      - SECRET_KEY=your-secret-key-change-in-production
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/docs", "||", "exit", "1"]
+      test: ["CMD", "curl", "-f", "http://localhost:8000/docs"]
       interval: 30s
       timeout: 10s
       retries: 5
-      start_period: 40s
+      start_period: 60s
     restart: unless-stopped
     networks:
       - distribuidora-network
@@ -70,8 +53,6 @@ services:
         condition: service_healthy
       sqlserver:
         condition: service_healthy
-      db-migrator:
-        condition: service_completed_successfully
     environment:
       - RABBITMQ_URL=amqp://guest:guest@rabbitmq:5672/
       - SMTP_HOST=smtp.gmail.com
@@ -121,20 +102,22 @@ services:
       - SA_PASSWORD=yourStrongPassword123#
       - MSSQL_PID=Developer
       - MSSQL_AGENT_ENABLED=true
+      - MSSQL_TCP_PORT=1433
+      - MSSQL_COLLATION=SQL_Latin1_General_CP1_CI_AS
     volumes:
       - sqlserver_data:/var/opt/mssql
     deploy:
       resources:
         limits:
-          memory: 2G
+          memory: 3G
         reservations:
-          memory: 1G
+          memory: 2G
     healthcheck:
-      test: ["CMD-SHELL", "/opt/mssql-tools18/bin/sqlcmd -S localhost -U SA -P 'yourStrongPassword123#' -C -Q 'SELECT 1' || exit 1"]
-      interval: 30s
-      timeout: 20s
-      retries: 10
-      start_period: 120s
+      test: ["CMD-SHELL", "timeout 5 /opt/mssql-tools18/bin/sqlcmd -S localhost,1433 -U SA -P 'yourStrongPassword123#' -Q 'SELECT 1' > /dev/null 2>&1 && echo 0 || echo 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+      start_period: 240s
     restart: unless-stopped
     networks:
       - distribuidora-network

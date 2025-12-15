@@ -4,10 +4,70 @@
 - [Architecture](../ARCHITECTURE.md)
 - [Product](../PRODUCT.md)
 - [Contributing](../CONTRIBUTING.md)
+- [**Migration Guide** ⭐](./MIGRATION_GUIDE.md)
 
 # Distribuidora Perros y Gatos - Backend
 
 Backend API for Distribuidora Perros y Gatos e-commerce platform - a multi-vendor platform for pet supplies (dogs and cats).
+
+## 🚀 Quick Start (5 minutes)
+
+### Prerequisites
+- Docker and Docker Compose installed
+
+### Setup
+
+1. **Clone and navigate** to backend directory:
+   ```bash
+   cd distribuidora-animales-back
+   ```
+
+2. **Configure environment** (copy template):
+   ```bash
+   cp backend/api/.env.example backend/api/.env
+   # Edit if needed, but defaults work for local development
+   ```
+
+3. **Start all services** (migrations run automatically):
+   ```bash
+   docker-compose up
+   ```
+
+4. **Access the API**:
+   - API: http://localhost:8000
+   - API Docs (Swagger): http://localhost:8000/docs
+   - API Docs (ReDoc): http://localhost:8000/redoc
+
+5. **Login with default admin**:
+   - Email: `admin@distribuidora.local`
+   - Password: `Admin123!@#`
+
+That's it! The system automatically:
+- ✅ Waits for SQL Server to be ready
+- ✅ Applies all pending database migrations
+- ✅ Creates default admin user
+- ✅ Starts the FastAPI server
+
+### Subsequent Runs
+
+```bash
+# Start services
+docker-compose up
+
+# Stop services
+docker-compose down
+
+# View logs
+docker logs distribuidora-api
+
+# Full reset (warning: deletes all data)
+docker-compose down -v
+docker-compose up
+```
+
+For more details on migrations, see [MIGRATION_GUIDE.md](./MIGRATION_GUIDE.md).
+
+---
 
 ## Project Structure
 

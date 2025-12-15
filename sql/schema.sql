@@ -20,7 +20,12 @@ BEGIN
         fecha_registro DATETIME DEFAULT GETUTCDATE(),
         ultimo_login DATETIME NULL,
         created_at DATETIME DEFAULT GETUTCDATE(),
-        updated_at DATETIME DEFAULT GETUTCDATE()
+        updated_at DATETIME DEFAULT GETUTCDATE(),
+        telefono NVARCHAR(20) NULL,
+        direccion_envio NVARCHAR(500) NULL,
+        preferencia_mascotas NVARCHAR(20) NULL,
+        failed_login_attempts INT DEFAULT 0 NOT NULL,
+        locked_until DATETIME NULL
     );
     
     CREATE INDEX idx_email ON Usuarios(email);
@@ -193,7 +198,13 @@ BEGIN
         usuario_id INT NOT NULL,
         estado NVARCHAR(50) DEFAULT 'Pendiente' CHECK (estado IN ('Pendiente', 'Enviado', 'Entregado', 'Cancelado')),
         total DECIMAL(10, 2) NOT NULL DEFAULT 0,
+        subtotal DECIMAL(10, 2) NOT NULL DEFAULT 0,
+        costo_envio DECIMAL(10, 2) NOT NULL DEFAULT 0,
+        metodo_pago NVARCHAR(50) NULL DEFAULT 'Efectivo',
         direccion_entrega NVARCHAR(500) NOT NULL,
+        municipio NVARCHAR(100) NULL,
+        departamento NVARCHAR(100) NULL,
+        pais NVARCHAR(100) NULL DEFAULT 'Colombia',
         telefono_contacto NVARCHAR(20) NOT NULL,
         nota_especial NVARCHAR(500) NULL,
         fecha_creacion DATETIME DEFAULT GETUTCDATE(),

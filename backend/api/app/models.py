@@ -27,12 +27,12 @@ class Usuario(Base):
     created_at = Column(DateTime, nullable=True)
     updated_at = Column(DateTime, nullable=True)
 
-    # Additional fields added to match database schema
+    # Additional fields
     telefono = Column(String(20), nullable=True)
     direccion_envio = Column(String(500), nullable=True)
-    preferencia_mascotas = Column(String(20), nullable=True)  # Perros, Gatos, Ambos, Ninguno
+    preferencia_mascotas = Column(String(20), nullable=True)
     
-    # Campos para bloqueo de cuenta
+    # Campos para bloqueo de cuenta (si existen en la BD)
     failed_login_attempts = Column(Integer, default=0, nullable=False)
     locked_until = Column(DateTime, nullable=True)
 
@@ -160,8 +160,8 @@ class Calificacion(Base):
     id = Column(Integer, primary_key=True, index=True, autoincrement=True)
     producto_id = Column(Integer, nullable=False, index=True)
     usuario_id = Column(Integer, nullable=False, index=True)
-    pedido_id = Column(Integer, nullable=False, index=True)
-    calificacion = Column(Integer, nullable=False)  # 1-5 estrellas
+    pedido_id = Column(Integer, nullable=True, index=True)
+    calificacion = Column('puntuacion', Integer, nullable=False)  # Maps to 'puntuacion' in DB
     comentario = Column(String(500), nullable=True)
     fecha_creacion = Column(DateTime(timezone=True), server_default=func.now())
     fecha_actualizacion = Column(DateTime(timezone=True), onupdate=func.now(), server_default=func.now())
