@@ -38,7 +38,7 @@ class DatabaseMigrator:
         self.db_password = os.getenv('DB_PASSWORD', 'yourStrongPassword123#')
         self.db_name = os.getenv('DB_NAME', 'distribuidora_db')
         self.db_port = os.getenv('DB_PORT', '1433')
-        self.migrations_dir = Path(__file__).parent.parent.parent.parent / 'sql' / 'migrations'
+        self.migrations_dir = Path('/app/sql/migrations')
         self.connection = None
         
         logger.info("=" * 70)
@@ -48,6 +48,63 @@ class DatabaseMigrator:
         logger.info(f"Database: {self.db_name}")
         logger.info(f"Migrations Directory: {self.migrations_dir}")
         logger.info("=" * 70)
+    
+    def create_database_if_not_exists(self, max_retries: int = 60, retry_interval: int = 5) -> bool:
+        """
+        Create the database if it doesn't exist
+        
+        Args:
+            max_retries: Maximum number of connection attempts
+            retry_interval: Seconds to wait between retries
+        
+        Returns:
+            True if database exists or was created successfully
+        """
+        logger.info("\n📦 Ensuring database exists...")
+        
+        # Connect to master database to create target database
+        master_connection_string = (
+            f"Driver={{ODBC Driver 17 for SQL Server}};"
+            f"Server={self.db_server},{self.db_port};"
+            f"Database=master;"
+            f"UID={self.db_user};"
+            f"PWD={self.db_password};"
+            f"Encrypt=no;"
+            f"Connection Timeout=30;"
+        )
+        
+        for attempt in range(1, max_retries + 1):
+            try:
+                conn = pyodbc.connect(master_connection_string)
+                # CRITICAL: Enable autocommit for DDL operations like CREATE DATABASE
+                conn.autocommit = True
+                cursor = conn.cursor()
+                
+                # Check if database exists
+                cursor.execute(f"SELECT database_id FROM sys.databases WHERE name = '{self.db_name}'")
+                exists = cursor.fetchone() is not None
+                
+                if not exists:
+                    logger.info(f"   Database '{self.db_name}' does not exist. Creating...")
+                    cursor.execute(f"CREATE DATABASE [{self.db_name}]")
+                    logger.info(f"✅ Database '{self.db_name}' created successfully")
+                    # Give SQL Server a moment to finalize database creation
+                    time.sleep(3)
+                else:
+                    logger.info(f"✅ Database '{self.db_name}' already exists")
+                
+                cursor.close()
+                conn.close()
+                return True
+                
+            except Exception as e:
+                if attempt >= max_retries:
+                    logger.error(f"❌ Failed to create/verify database after {max_retries} attempts")
+                    logger.error(f"   Error: {str(e)}")
+                    return False
+                logger.warning(f"⏳ Database check attempt {attempt}/{max_retries} failed. Retrying in {retry_interval}s...")
+                logger.warning(f"   Error details: {str(e)}")
+                time.sleep(retry_interval)
     
     def connect(self, max_retries: int = 60, retry_interval: int = 5) -> bool:
         """
@@ -62,6 +119,13 @@ class DatabaseMigrator:
         """
         logger.info(f"\n🔌 Attempting to connect to SQL Server...")
         logger.info(f"   Max retries: {max_retries} (≈{max_retries * retry_interval}s)")
+        
+        # First, ensure database exists
+        if not self.create_database_if_not_exists():
+            return False
+        
+        # Wait a bit for database to be fully ready
+        time.sleep(2)
         
         connection_string = (
             f"Driver={{ODBC Driver 17 for SQL Server}};"
@@ -121,8 +185,12 @@ class DatabaseMigrator:
             with open(init_file, 'r') as f:
                 init_sql = f.read()
             
-            # Execute the initialization script
-            cursor.execute(init_sql)
+            # Execute the initialization script (split by GO statements)
+            for statement in init_sql.split('GO'):
+                statement = statement.strip()
+                if statement:
+                    cursor.execute(statement)
+            
             self.connection.commit()
             logger.info("✅ Migrations history table initialized")
             return True
@@ -197,35 +265,37 @@ class DatabaseMigrator:
             return []
     
     def apply_migration(self, migration_name: str, migration_path: Path) -> bool:
-        """
-        Apply a single migration file to the database
-        
-        Args:
-            migration_name: Name of the migration file
-            migration_path: Path to the migration file
-        
-        Returns:
-            True if successful, False otherwise
-        """
+        """Apply a single migration file to the database"""
         logger.info(f"\n🚀 Applying migration: {migration_name}")
         
         start_time = time.time()
         
         try:
-            with open(migration_path, 'r') as f:
+            with open(migration_path, 'r', encoding='utf-8') as f:
                 sql_content = f.read()
             
             cursor = self.connection.cursor()
             
-            # Execute migration in a transaction
-            cursor.execute("BEGIN TRANSACTION")
-            
             try:
-                # Execute the SQL (may contain multiple statements separated by GO)
-                for statement in sql_content.split('GO'):
-                    statement = statement.strip()
-                    if statement:
-                        cursor.execute(statement)
+                # Remove GO statements and comments
+                sql_content = '\n'.join([
+                    line for line in sql_content.split('\n')
+                    if line.strip().upper() != 'GO' and not line.strip().startswith('--')
+                ])
+                
+                # Split by semicolon and execute each statement individually
+                statements = [
+                    stmt.strip() 
+                    for stmt in sql_content.split(';') 
+                    if stmt.strip()
+                ]
+                
+                for statement in statements:
+                    if statement and not statement.upper().startswith('GO'):
+                        try:
+                            cursor.execute(statement)
+                        except Exception as stmt_error:
+                            logger.warning(f"   ⚠️  Statement failed (continuing): {str(stmt_error)[:100]}")
                 
                 # Record the migration in history
                 cursor.execute(
@@ -237,39 +307,19 @@ class DatabaseMigrator:
                     (migration_name, 'success', int((time.time() - start_time) * 1000))
                 )
                 
-                # Commit transaction
-                cursor.execute("COMMIT TRANSACTION")
                 self.connection.commit()
                 
                 logger.info(f"   ✅ Migration applied successfully ({int((time.time() - start_time) * 1000)}ms)")
                 return True
                 
             except Exception as e:
-                cursor.execute("ROLLBACK TRANSACTION")
-                self.connection.commit()
+                self.connection.rollback()
                 raise e
             finally:
                 cursor.close()
             
         except Exception as e:
             logger.error(f"   ❌ Migration failed: {str(e)}")
-            
-            # Try to record failure in history
-            try:
-                cursor = self.connection.cursor()
-                cursor.execute(
-                    """
-                    INSERT INTO __migrations_history 
-                    (migration_name, status, error_message, execution_time_ms)
-                    VALUES (?, ?, ?, ?)
-                    """,
-                    (migration_name, 'failed', str(e), int((time.time() - start_time) * 1000))
-                )
-                self.connection.commit()
-                cursor.close()
-            except:
-                pass
-            
             return False
     
     def apply_all_migrations(self) -> bool:

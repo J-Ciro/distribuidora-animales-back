@@ -1,44 +1,24 @@
--- Migration: create Carts and CartItems tables
--- Compatible with SQL Server
-
-IF OBJECT_ID('dbo.CartItems', 'U') IS NULL
-BEGIN
-    CREATE TABLE dbo.CartItems (
-        id BIGINT IDENTITY(1,1) PRIMARY KEY,
-        cart_id BIGINT NOT NULL,
-        producto_id BIGINT NOT NULL,
-        cantidad INT NOT NULL CHECK (cantidad > 0),
-        fecha_creacion DATETIME2 DEFAULT SYSUTCDATETIME(),
-        fecha_actualizacion DATETIME2 NULL
-    );
-END
-
-IF OBJECT_ID('dbo.Carts', 'U') IS NULL
-BEGIN
-    CREATE TABLE dbo.Carts (
-        id BIGINT IDENTITY(1,1) PRIMARY KEY,
-        usuario_id BIGINT NULL,
-        session_id NVARCHAR(128) NULL,
-        created_at DATETIME2 DEFAULT SYSUTCDATETIME(),
-        updated_at DATETIME2 DEFAULT SYSUTCDATETIME()
-    );
-    CREATE INDEX IX_Carts_session_id ON dbo.Carts(session_id);
-    CREATE INDEX IX_Carts_usuario_id ON dbo.Carts(usuario_id);
-END
-
--- Add foreign key constraints if Productos table exists
-IF OBJECT_ID('dbo.Productos', 'U') IS NOT NULL AND OBJECT_ID('dbo.Carts', 'U') IS NOT NULL
-BEGIN
-    ALTER TABLE dbo.CartItems
-    ADD CONSTRAINT FK_CartItems_Productos FOREIGN KEY (producto_id) REFERENCES dbo.Productos(id) ON DELETE NO ACTION;
-END
-
--- APLICANDO LA CORRECCIÓN: Cambiar ON DELETE CASCADE a ON DELETE NO ACTION en FK_CartItems_Carts
--- para evitar el error de "multiple cascade paths" (Msg 1785).
-IF OBJECT_ID('dbo.CartItems', 'U') IS NOT NULL AND OBJECT_ID('dbo.Carts', 'U') IS NOT NULL
-BEGIN
-    ALTER TABLE dbo.CartItems
-    ADD CONSTRAINT FK_CartItems_Carts FOREIGN KEY (cart_id) REFERENCES dbo.Carts(id) ON DELETE NO ACTION; -- CAMBIO AQUÍ
-END
-
--- Notes: run this script against the database using sqlcmd or SSMS
+CREATE TABLE Carts (
+    id INT PRIMARY KEY IDENTITY(1,1),
+    usuario_id INT,
+    session_id NVARCHAR(255),
+    total DECIMAL(10, 2) DEFAULT 0,
+    cantidad_items INT DEFAULT 0,
+    fecha_creacion DATETIME DEFAULT GETUTCDATE(),
+    fecha_actualizacion DATETIME DEFAULT GETUTCDATE()
+);
+CREATE INDEX idx_cart_usuario ON Carts(usuario_id);
+CREATE INDEX idx_cart_session ON Carts(session_id);
+CREATE TABLE CartItems (
+    id INT PRIMARY KEY IDENTITY(1,1),
+    cart_id INT NOT NULL,
+    producto_id INT NOT NULL,
+    cantidad INT NOT NULL,
+    precio_unitario DECIMAL(10, 2) NOT NULL,
+    subtotal DECIMAL(10, 2) NOT NULL,
+    fecha_agregado DATETIME DEFAULT GETUTCDATE(),
+    CONSTRAINT fk_cartitem_cart FOREIGN KEY (cart_id) REFERENCES Carts(id) ON DELETE CASCADE,
+    CONSTRAINT fk_cartitem_producto FOREIGN KEY (producto_id) REFERENCES Productos(id)
+);
+CREATE INDEX idx_cartitem_cart ON CartItems(cart_id);
+CREATE INDEX idx_cartitem_producto ON CartItems(producto_id);

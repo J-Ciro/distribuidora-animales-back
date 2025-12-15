@@ -42,7 +42,7 @@ class AdminSeeder:
         self.db_port = os.getenv('DB_PORT', '1433')
         
         # Admin credentials from environment
-        self.admin_email = os.getenv('ADMIN_EMAIL', 'admin@distribuidora.local')
+        self.admin_email = os.getenv('ADMIN_EMAIL', 'admin@gmail.com')
         self.admin_password = os.getenv('ADMIN_PASSWORD', 'Admin123!@#')
         
         self.connection = None
