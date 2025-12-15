@@ -10,10 +10,10 @@
 
 Backend API for Distribuidora Perros y Gatos e-commerce platform - a multi-vendor platform for pet supplies (dogs and cats).
 
-## 🚀 Quick Start (5 minutes)
+## 🚀 Quick Start (2 minutes)
 
 ### Prerequisites
-- Docker and Docker Compose installed
+- Podman or Docker installed and running
 
 ### Setup
 
@@ -22,47 +22,41 @@ Backend API for Distribuidora Perros y Gatos e-commerce platform - a multi-vendo
    cd distribuidora-animales-back
    ```
 
-2. **Configure environment** (copy template):
+2. **Build and start all services**:
    ```bash
-   cp backend/api/.env.example backend/api/.env
-   # Edit if needed, but defaults work for local development
+   podman compose build
+   podman compose up
    ```
 
-3. **Start all services** (migrations run automatically):
-   ```bash
-   docker-compose up
-   ```
-
-4. **Access the API**:
+3. **Access the API**:
    - API: http://localhost:8000
    - API Docs (Swagger): http://localhost:8000/docs
    - API Docs (ReDoc): http://localhost:8000/redoc
 
-5. **Login with default admin**:
-   - Email: `admin@distribuidora.local`
+4. **Login with default admin**:
+   - Email: `admin@gmail.com`
    - Password: `Admin123!@#`
 
 That's it! The system automatically:
 - ✅ Waits for SQL Server to be ready
 - ✅ Applies all pending database migrations
 - ✅ Creates default admin user
+- ✅ Seeds initial data (categories, products, carousel)
 - ✅ Starts the FastAPI server
 
 ### Subsequent Runs
 
 ```bash
 # Start services
-docker-compose up
+podman compose up
 
 # Stop services
-docker-compose down
-
-# View logs
-docker logs distribuidora-api
+podman compose down
 
 # Full reset (warning: deletes all data)
-docker-compose down -v
-docker-compose up
+podman compose down -v
+podman compose build
+podman compose up
 ```
 
 For more details on migrations, see [MIGRATION_GUIDE.md](./MIGRATION_GUIDE.md).
@@ -126,7 +120,7 @@ For more details on migrations, see [MIGRATION_GUIDE.md](./MIGRATION_GUIDE.md).
 │
 ├── Dockerfile.api
 ├── Dockerfile.worker
-├── docker-compose.yml
+├── podman-compose.yml
 ├── .gitignore
 ├── .env.example
 └── README.md
@@ -254,247 +248,180 @@ For more details on migrations, see [MIGRATION_GUIDE.md](./MIGRATION_GUIDE.md).
 # 🏁 Getting Started
 
 ## Requisitos
-- **Windows PowerShell 5.1+** (para ejecutar los scripts de instalación)
-- **Docker Desktop** instalado y ejecutándose
-- **Docker Compose** incluido con Docker Desktop
+- **Podman** o **Docker** instalado y ejecutándose
 - Al menos **4GB de RAM** disponible para los contenedores
 - Puertos **8000, 1433, 5672, 15672** disponibles
-- **Conexión a Internet** (para descargar imágenes Docker y configurar email)
+- **Conexión a Internet** (para descargar imágenes y configurar email)
 
 ---
 
-# 🐳 Setup con Docker (Recomendado)
+# 🐳 Setup con Podman (Recomendado)
 
-## 🚀 Primera Vez - Instalación Automática con Scripts
+## 🚀 Primera Vez - Instalación Completa
 
-**Recomendamos usar los scripts de PowerShell para una instalación guiada y sin errores.**
-
-### Paso 1: Corregir Migraciones (Una sola vez)
-
-```powershell
+```bash
 # 1. Clonar el repositorio
 git clone <url-del-repositorio>
 cd distribuidora-animales-back
 
-# 2. Ejecutar script de corrección de migraciones
-.\fix-migrations.ps1
+# 2. Construir imágenes
+podman compose build
+
+# 3. Iniciar todos los servicios
+podman compose up
 ```
 
-**¿Qué hace `fix-migrations.ps1`?**
-- ✅ Convierte `init-db.sh` de CRLF (Windows) a LF (Unix)
-- ✅ Renumera migraciones secuencialmente (001-010)
-- ✅ Elimina archivos de seeders duplicados
-- ✅ Valida que todo esté listo para la migración
+**Eso es todo!** El sistema realiza automáticamente:
 
-### Paso 2: Instalación Completa del Sistema
+1. **Espera a que SQL Server esté listo**
+   - Verifica conexión a la base de datos
+   - Reintentos automáticos
 
-```powershell
-# 3. Ejecutar script de instalación automática
-.\setup.ps1
-```
+2. **Aplica migraciones secuencialmente**
+   - Crea 14 tablas
+   - Aplica 10 migraciones
+   - Ejecuta 3 seeders (categorías, productos, carrusel)
 
-**¿Qué hace `setup.ps1`?**
+3. **Crea usuario administrador automáticamente**
+   - Email: `admin@gmail.com`
+   - Contraseña: `Admin123!@#`
+   - Email verificado automáticamente
 
-El script realiza **8 pasos automatizados**:
+4. **Inicia todos los servicios**
+   - API FastAPI en `http://localhost:8000`
+   - Worker Node.js procesando colas
+   - SQL Server en `localhost:1433`
+   - RabbitMQ con UI en `http://localhost:15672`
 
-1. **Validación de Prerequisitos**
-   - Verifica que Docker esté instalado y corriendo
-   - Valida Docker Compose
-
-2. **Limpieza de Instalación Anterior**
-   - Elimina contenedores previos
-   - Limpia volúmenes y redes
-
-3. **Configuración de Archivos `.env`**
-   - Crea `backend/api/.env` desde `.env.example`
-   - Crea `backend/worker/.env` desde `.env.example`
-
-4. **Configuración de Email (Opcional)**
-   - Solicita credenciales de Gmail
-   - Guía para obtener contraseña de aplicación de Google
-   - Configura SMTP automáticamente
-
-5. **Validación de Archivos SQL**
-   - Verifica `schema.sql`, `init-db.sh`
-   - Cuenta migraciones y seeders
-
-6. **Construcción e Inicio de Contenedores**
-   - Ejecuta `docker-compose up -d --build`
-   - Inicia: SQL Server, API, Worker, RabbitMQ, DB-Migrator
-
-7. **Verificación de Servicios (con Healthchecks)**
-   - **SQL Server**: hasta 120 segundos (24 intentos x 5s)
-   - **API**: hasta 60 segundos (12 intentos x 5s)
-   - **Worker**: verificación de estado
-   - **Migrations**: confirma que se aplicaron correctamente
-
-8. **Creación de Usuario Administrador**
-   - Solicita email y contraseña
-   - Crea usuario con rol `Admin`
-   - Marca email como verificado automáticamente
-
-**Tiempo estimado**: 3-5 minutos (primera vez)
-
-### 🎯 Resultado Final
-
-Al completar `setup.ps1` tendrás:
-
-- ✅ Base de datos con **14 tablas** creadas
-- ✅ **10 migraciones** aplicadas secuencialmente
-- ✅ **3 seeders** con datos de ejemplo (categorías, productos, carrusel)
-- ✅ Usuario **Administrador** creado y listo para usar
-- ✅ Sistema de **verificación de email** configurado (si elegiste configurar Gmail)
-- ✅ **4 servicios** corriendo:
-  - API FastAPI en `http://localhost:8000`
-  - Worker Node.js procesando colas
-  - SQL Server en `localhost:1433`
-  - RabbitMQ con UI en `http://localhost:15672`
+**Tiempo estimado**: 2-3 minutos (primera vez)
 
 ### 📋 Servicios Disponibles
 
 | Servicio | URL | Credenciales |
 |----------|-----|-------------|
 | **API (Swagger)** | http://localhost:8000/docs | - |
+| **API (ReDoc)** | http://localhost:8000/redoc | - |
 | **RabbitMQ UI** | http://localhost:15672 | guest / guest |
 | **SQL Server** | localhost:1433 | sa / yourStrongPassword123# |
 | **Health Check** | http://localhost:8000/health | - |
 
 ---
 
-## 🔄 Instalación Manual (Sin Scripts)
-
-Si prefieres ejecutar los comandos manualmente:
+## 🔄 Comandos Útiles
 
 ```bash
-# 1. Configurar archivos .env
-cp backend/api/.env.example backend/api/.env
-cp backend/worker/.env.example backend/worker/.env
+# Iniciar servicios (primera vez completa)
+podman compose build
+podman compose up
 
-# 2. Editar archivos .env con tus credenciales de email
+# Iniciar servicios (mantiene datos previos)
+podman compose up
 
-# 3. Iniciar servicios
-docker-compose up -d --build
+# Detener servicios (mantiene datos)
+podman compose down
 
-# 4. Verificar migración exitosa
-docker logs distribuidora-db-migrator
+# Reiniciar servicios (mantiene datos)
+podman compose restart
 
-# 5. Verificar API funcionando
-curl http://localhost:8000/health
+# Ver logs en tiempo real
+podman logs -f distribuidora-api
+podman logs -f distribuidora-worker
+podman logs -f sqlserver
+
+# Ver logs de todos los servicios
+podman compose logs -f
+
+# Reiniciar desde cero (⚠️ ELIMINA TODOS LOS DATOS)
+podman compose down -v
+podman compose build
+podman compose up
+
+# Ver estado de los servicios
+podman compose ps
 ```
-
-**Nota**: Con la instalación manual deberás crear el usuario administrador manualmente desde http://localhost:8000/docs
 
 ---
 
 ## ✅ Verificar Estado de los Servicios
 
-```powershell
+```bash
 # Ver todos los servicios corriendo
-docker-compose ps
+podman compose ps
 
 # Ver logs en tiempo real
-docker logs -f distribuidora-api
-docker logs -f distribuidora-worker
-docker logs -f sqlserver
-
-# Ver logs de migración
-docker logs distribuidora-db-migrator
+podman logs -f distribuidora-api
 
 # Verificar tablas creadas
-docker exec sqlserver /opt/mssql-tools/bin/sqlcmd -S localhost -U sa -P "yourStrongPassword123#" -d distribuidora_db -Q "SELECT name FROM sys.tables ORDER BY name"
-```
+podman exec sqlserver /opt/mssql-tools/bin/sqlcmd -S localhost -U sa -P "yourStrongPassword123#" -d distribuidora_db -Q "SELECT name FROM sys.tables ORDER BY name"
 
----
+# Verificar que el admin se creó
+podman exec sqlserver /opt/mssql-tools/bin/sqlcmd -S localhost -U sa -P "yourStrongPassword123#" -d distribuidora_db -Q "SELECT email, rol FROM Usuarios WHERE email='admin@gmail.com'"
 
-## 🔧 Comandos Útiles
-
-```powershell
-# Reiniciar servicios (mantiene datos)
-docker-compose restart
-
-# Detener servicios (mantiene datos)
-docker-compose down
-
-# Reiniciar desde cero (⚠️ ELIMINA TODOS LOS DATOS)
-docker-compose down -v
-.\setup.ps1
-
-# Ver logs de todos los servicios
-docker-compose logs -f
-
-# Acceder al contenedor de SQL Server
-docker exec -it sqlserver /bin/bash
-
-# Ejecutar query directamente
-docker exec sqlserver /opt/mssql-tools/bin/sqlcmd -S localhost -U sa -P "yourStrongPassword123#" -d distribuidora_db -Q "SELECT COUNT(*) FROM Productos"
+# Verificar migraciones aplicadas
+podman logs distribuidora-db-migrator
 ```
 
 ---
 
 ## 🐛 Troubleshooting (Solución de Problemas)
 
-### ❌ Error: "Docker no está corriendo"
-**Solución**: Inicia Docker Desktop y espera a que aparezca el ícono verde en la bandeja del sistema.
+### ❌ Error: "Podman no está corriendo"
+**Solución**: Inicia Podman Desktop o el servicio de Podman y espera a que esté listo.
 
 ### ❌ Error: "Puerto 8000 ya está en uso"
-**Solución**: 
-```powershell
-# Buscar proceso usando el puerto
-Get-NetTCPConnection -LocalPort 8000 -ErrorAction SilentlyContinue
-# Detener el proceso o cambiar el puerto en docker-compose.yml
+**Solución**:
+```bash
+# Detener servicio anterior
+podman compose down
+
+# O cambiar el puerto en podman-compose.yml
 ```
 
 ### ❌ Error: "SQL Server no responde a tiempo"
-**Solución**: SQL Server puede tardar hasta 2 minutos en iniciar. El script `setup.ps1` espera automáticamente. Si falla:
-```powershell
+**Solución**: SQL Server puede tardar hasta 2 minutos en iniciar. El sistema reintentar automáticamente:
+```bash
 # Ver logs de SQL Server
-docker logs sqlserver
-# Reintentar manualmente
-docker-compose restart sqlserver
+podman logs sqlserver
+
+# Reintentar
+podman compose down -v
+podman compose build
+podman compose up
 ```
 
 ### ❌ Error: "Migraciones no se aplicaron"
 **Solución**:
-```powershell
+```bash
 # Ver logs del migrator
-docker logs distribuidora-db-migrator
-# Si hay error de CRLF, ejecutar fix-migrations.ps1
-.\fix-migrations.ps1
-# Reiniciar migración
-docker-compose down -v
-docker-compose up -d
+podman logs distribuidora-db-migrator
+
+# Reiniciar desde cero
+podman compose down -v
+podman compose build
+podman compose up
+```
+
+### ❌ Error: "No puedo acceder con las credenciales de admin"
+**Solución**: El usuario admin se crea automáticamente. Verifica que exista:
+```bash
+# Verificar que el admin existe
+podman exec sqlserver /opt/mssql-tools/bin/sqlcmd -S localhost -U sa -P "yourStrongPassword123#" -d distribuidora_db -Q "SELECT email, rol, email_verificado FROM Usuarios WHERE email='admin@gmail.com'"
+
+# Las credenciales son:
+# Email: admin@gmail.com
+# Contraseña: Admin123!@#
 ```
 
 ### ❌ Error: "Email no se envía"
 **Solución**:
-1. Verifica que hayas configurado Gmail con contraseña de aplicación
-2. Revisa los logs del worker: `docker logs distribuidora-worker`
+1. Verifica que hayas configurado SMTP en `.env`
+2. Revisa los logs del worker: `podman logs distribuidora-worker`
 3. Consulta la [Guía de Configuración de Email](./CONFIGURACION_EMAIL_ACTUALIZADA.md)
-
-### ❌ Error: "Usuario administrador no se creó"
-**Solución**: Créalo manualmente:
-```powershell
-# Opción 1: Desde Swagger UI
-# 1. Ve a http://localhost:8000/docs
-# 2. Endpoint POST /api/auth/register
-# 3. Registra usuario
-# 4. Actualiza rol a Admin en la BD:
-docker exec sqlserver /opt/mssql-tools/bin/sqlcmd -S localhost -U sa -P "yourStrongPassword123#" -d distribuidora_db -Q "UPDATE Usuarios SET rol='Admin', email_verificado=1 WHERE email='tumail@example.com'"
-```
 
 ---
 
 ## 📖 Documentación Adicional
-
 - [Arquitectura del Sistema](./ARCHITECTURE.md)
-- [Flujo de Trabajo con IA](./AI_WORKFLOW.md)
 - [Guía de Migraciones](./VERIFICACION_MIGRACION.md)
 - [Historias de Usuario](./HU/README_HU.md)
-- [Sistema de Calificaciones](./Promts/SISTEMA_CALIFICACIONES.md)
-- [Configuración de Email](./Promts/CONFIGURACION_EMAIL_ACTUALIZADA.md)
-
 ---
-
-# 💻 Setup Local (Sin Docker)
-
-Si prefieres ejecutar los servicios localmente:

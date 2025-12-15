@@ -303,7 +303,7 @@ DB_PASSWORD=...              # Database password (REQUIRED)
 ### Required for Admin Seeding
 
 ```bash
-ADMIN_EMAIL=admin@distribuidora.local       # Email for default admin
+ADMIN_EMAIL=admin@gmail.com       # Email for default admin
 ADMIN_PASSWORD=Admin123!@#                  # Password for default admin
 ```
 

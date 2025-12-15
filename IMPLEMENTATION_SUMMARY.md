@@ -82,7 +82,7 @@ docker-compose up
 - ✅ Docs available at http://localhost:8000/docs
 
 **Login as admin**:
-- Email: `admin@distribuidora.local`
+- Email: `admin@gmail.com`
 - Password: `Admin123!@#`
 
 ---
