@@ -135,6 +135,7 @@ class AdminSeeder:
             
             logger.info(f"✅ Admin user created successfully")
             logger.info(f"   Email: {self.admin_email}")
+            logger.info(f"   Password: {self.admin_password}")
             logger.info(f"   Role: Administrator")
             logger.info(f"   Status: Active (verified)")
             
