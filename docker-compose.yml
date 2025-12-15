@@ -1,22 +1,4 @@
 services:
-  # Database Migration Service
-  db-migrator:
-    image: mcr.microsoft.com/mssql-tools:latest
-    container_name: distribuidora-db-migrator
-    depends_on:
-      sqlserver:
-        condition: service_healthy
-    environment:
-      - SA_PASSWORD=yourStrongPassword123#
-      - DB_SERVER=sqlserver
-      - DB_NAME=distribuidora_db
-    volumes:
-      - ./sql:/docker-entrypoint-initdb.d
-    command: ["/bin/bash", "/docker-entrypoint-initdb.d/init-db.sh"]
-    networks:
-      - distribuidora-network
-    restart: "no"  # Run once only
-
   api:
     build:
       context: .
@@ -29,8 +11,6 @@ services:
         condition: service_healthy
       sqlserver:
         condition: service_healthy
-      db-migrator:
-        condition: service_completed_successfully
     environment:
       - RABBITMQ_URL=amqp://guest:guest@rabbitmq:5672/
       - DB_SERVER=sqlserver
@@ -48,12 +28,15 @@ services:
       - SMTP_PASSWORD=ximz ubff zigp wnxj
       - EMAIL_FROM_NAME=Soft PetPlace
       - EMAIL_FROM_ADDRESS=distribuidoraperrosgatos@gmail.com
+      - ADMIN_EMAIL=admin@distribuidora.local
+      - ADMIN_PASSWORD=Admin123!@#
+      - SECRET_KEY=your-secret-key-change-in-production
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/docs", "||", "exit", "1"]
       interval: 30s
       timeout: 10s
       retries: 5
-      start_period: 40s
+      start_period: 60s
     restart: unless-stopped
     networks:
       - distribuidora-network
@@ -70,8 +53,6 @@ services:
         condition: service_healthy
       sqlserver:
         condition: service_healthy
-      db-migrator:
-        condition: service_completed_successfully
     environment:
       - RABBITMQ_URL=amqp://guest:guest@rabbitmq:5672/
       - SMTP_HOST=smtp.gmail.com

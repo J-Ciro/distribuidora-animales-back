@@ -35,8 +35,17 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copia el resto del código de la aplicación
 COPY backend/api/ .
 
+# Copia las migraciones SQL
+COPY sql/ /app/sql/
+
+# Copia el entrypoint script
+COPY backend/api/entrypoint.sh /app/entrypoint.sh
+
+# Make entrypoint script executable
+RUN chmod +x /app/entrypoint.sh
+
 # El contenedor expone el puerto 8000
 EXPOSE 8000
 
-# Define el comando para ejecutar la app
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
+# Use entrypoint to orchestrate migrations, seeding, and API startup
+ENTRYPOINT ["/bin/bash", "/app/entrypoint.sh"]
