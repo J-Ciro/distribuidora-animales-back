@@ -11,11 +11,11 @@ $testsPassed = $false
 $podmanReady = $false
 
 # Variables de entorno para pruebas
-$env:ADMIN_EMAIL = ${env:ADMIN_EMAIL} ? ${env:ADMIN_EMAIL} : "admin@test.local"
-$env:ADMIN_PASS = ${env:ADMIN_PASS} ? ${env:ADMIN_PASS} : "Passw0rd!"
-$env:BACKEND_BASE_URL = ${env:BACKEND_BASE_URL} ? ${env:BACKEND_BASE_URL} : "http://localhost:8000"
-$env:BACKEND_LOG_FILE = ${env:BACKEND_LOG_FILE} ? ${env:BACKEND_LOG_FILE} : (Join-Path (Join-Path $PWD "logs") "backend\app.log")
-$env:BACKEND_WAIT_SECONDS = ${env:BACKEND_WAIT_SECONDS} ? ${env:BACKEND_WAIT_SECONDS} : "60"
+if (-not $env:ADMIN_EMAIL) { $env:ADMIN_EMAIL = "admin@gmail.com" }
+if (-not $env:ADMIN_PASS) { $env:ADMIN_PASS = "Admin123!@#" }
+if (-not $env:BACKEND_BASE_URL) { $env:BACKEND_BASE_URL = "http://localhost:8000" }
+if (-not $env:BACKEND_LOG_FILE) { $env:BACKEND_LOG_FILE = (Join-Path (Join-Path $PWD "logs") "backend\app.log") }
+if (-not $env:BACKEND_WAIT_SECONDS) { $env:BACKEND_WAIT_SECONDS = "60" }
 
 function Wait-For-Health {
     param(
