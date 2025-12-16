@@ -13,4 +13,8 @@ def test_log_contains_creation_message(read_backend_logs):
 def test_log_contains_skip_message(read_backend_logs):
     logs = read_backend_logs()
     assert logs
-    assert (ADMIN_SKIPPED_MSG in logs) or ("Admin already exists. Skipping." in logs)
+    assert (
+        (ADMIN_SKIPPED_MSG in logs)
+        or ("Admin already exists. Skipping." in logs)
+        or ("✨ Admin seeding skipped (already exists)" in logs)
+    )

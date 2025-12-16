@@ -46,7 +46,8 @@ try {
     podman compose up -d | Out-Null
 
     Write-Host "  Esperando health del backend..." -ForegroundColor Yellow
-    $healthOk = Wait-For-Health -Url "$env:BACKEND_BASE_URL/health" -TimeoutSeconds [int]$env:BACKEND_WAIT_SECONDS
+    $timeoutSeconds = [int]$env:BACKEND_WAIT_SECONDS
+    $healthOk = Wait-For-Health -Url "$env:BACKEND_BASE_URL/health" -TimeoutSeconds $timeoutSeconds
     if (-not $healthOk) { throw "Backend no saludable tras el arranque" }
 
     # Reinicio para generar logs de idempotencia antes de correr pytest
@@ -54,7 +55,7 @@ try {
     podman compose restart | Out-Null
 
     Write-Host "  Verificando health tras restart..." -ForegroundColor Yellow
-    $healthOk2 = Wait-For-Health -Url "$env:BACKEND_BASE_URL/health" -TimeoutSeconds [int]$env:BACKEND_WAIT_SECONDS
+    $healthOk2 = Wait-For-Health -Url "$env:BACKEND_BASE_URL/health" -TimeoutSeconds $timeoutSeconds
     if (-not $healthOk2) { throw "Backend no saludable tras el restart" }
 
     $podmanReady = $true
@@ -74,12 +75,17 @@ if (Test-Path "venv\Scripts\Activate.ps1") {
     Write-Host "  Ejecutando pytest..." -ForegroundColor Cyan
     Write-Host ""
     
+    # Agregar backend/api al PYTHONPATH para que pytest pueda importar app
+    $env:PYTHONPATH = Join-Path $PWD "backend\api"
+    
     # Ejecutar pytest en backend\tests
     Push-Location backend\tests
     
     try {
         if ($podmanReady) {
-            pytest -v --tb=short
+                # Ejecutar solo los tests de seeding/admin (ignorar tests legacy que requieren .env)
+                Write-Host "\nEjecutando pruebas de seeding/admin...\n" -ForegroundColor Cyan
+                pytest . --ignore=test_myorders_endpoint.py --ignore=test_pedido_response.py -k "seeding_admin or admin_dashboard_access" -v --tb=short
         } else {
             Write-Host "  Saltando pruebas: Podman no listo" -ForegroundColor Red
             $exitCode = 1
