@@ -46,6 +46,8 @@ from app.routers.public_orders import router as orders_public_router
 from app.routers.admin_users import router as admin_users_router
 from app.routers.home_products import router as home_products_router
 from app.routers.ratings import public_router as ratings_public_router, admin_router as ratings_admin_router
+from app.routers.payments import router as payments_router
+from app.routers.webhooks import router as webhooks_router
 
 
 @asynccontextmanager
@@ -193,6 +195,8 @@ app.include_router(admin_users_router, tags=["admin-users"])
 app.include_router(home_products_router, tags=["home-products"])
 app.include_router(ratings_public_router, tags=["ratings"])
 app.include_router(ratings_admin_router, tags=["admin-ratings"])
+app.include_router(payments_router, tags=["payments"])
+app.include_router(webhooks_router, tags=["webhooks"])
 
 # Test utilities router
 app.include_router(admin_router)

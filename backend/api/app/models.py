@@ -112,6 +112,7 @@ class Pedido(Base):
     id = Column(Integer, primary_key=True, index=True, autoincrement=True)
     usuario_id = Column(Integer, nullable=False, index=True)
     estado = Column(String(50), nullable=False, default='Pendiente')
+    estado_pago = Column(String(50), nullable=False, default='Pendiente de Pago', index=True)  # Payment status: Pendiente de Pago, Pagado, Fallido
     total = Column(Numeric(10, 2), nullable=False, default=0)
     subtotal = Column(Numeric(10, 2), nullable=False, default=0)
     costo_envio = Column(Numeric(10, 2), nullable=False, default=0)
@@ -121,9 +122,11 @@ class Pedido(Base):
     departamento = Column(String(100), nullable=True)
     pais = Column(String(100), nullable=True, default='Colombia')
     telefono_contacto = Column(String(20), nullable=False)
-    metodo_pago = Column(String(50), nullable=True, default='Efectivo')
     nota_especial = Column(String(500), nullable=True)
     fecha_creacion = Column(DateTime(timezone=True), server_default=func.now())
+    
+    # Relationships
+    detalles = relationship("PedidoItem", back_populates="pedido", lazy="joined")
 
 
 class PedidoItem(Base):
@@ -134,6 +137,9 @@ class PedidoItem(Base):
     producto_id = Column(Integer, nullable=False)
     cantidad = Column(Integer, nullable=False)
     precio_unitario = Column(Numeric(10, 2), nullable=False)
+    
+    # Relationships
+    pedido = relationship("Pedido", back_populates="detalles")
 
 
 class PedidosHistorialEstado(Base):
@@ -185,3 +191,57 @@ class ProductoStats(Base):
     total_2_estrellas = Column(Integer, default=0, nullable=False)
     total_1_estrella = Column(Integer, default=0, nullable=False)
     fecha_actualizacion = Column(DateTime(timezone=True), server_default=func.now())
+
+# Payment Transaction Models (US-FUNC-01: Stripe Integration)
+class TransaccionPago(Base):
+    """
+    Modelo para la tabla TransaccionPago
+    Almacena transacciones de pago procesadas por Stripe
+    """
+    __tablename__ = 'TransaccionPago'
+
+    id = Column(Integer, primary_key=True, index=True, autoincrement=True)
+    pedido_id = Column(Integer, ForeignKey('Pedidos.id', ondelete='CASCADE'), nullable=False, index=True)
+    payment_intent_id = Column(String(100), unique=True, nullable=False, index=True)
+    usuario_id = Column(Integer, nullable=False, index=True)
+    monto = Column(Numeric(10, 2), nullable=False)
+    moneda = Column(String(3), nullable=False, default='USD')
+    estado = Column(String(50), nullable=False, default='pending', index=True)  # pending, succeeded, failed, canceled
+    metodo_pago = Column(String(50), nullable=True)  # card, link, etc
+    detalles_error = Column(String(500), nullable=True)
+    fecha_creacion = Column(DateTime(timezone=True), server_default=func.now(), index=True)
+    fecha_actualizacion = Column(DateTime(timezone=True), onupdate=func.now(), server_default=func.now())
+    fecha_confirmacion = Column(DateTime(timezone=True), nullable=True)
+
+
+class EstadoPagoHistorial(Base):
+    """
+    Modelo para la tabla EstadoPagoHistorial
+    Registra el historial de cambios de estado en transacciones de pago
+    """
+    __tablename__ = 'EstadoPagoHistorial'
+
+    id = Column(Integer, primary_key=True, index=True, autoincrement=True)
+    transaccion_id = Column(Integer, ForeignKey('TransaccionPago.id', ondelete='CASCADE'), nullable=False, index=True)
+    estado_anterior = Column(String(50), nullable=True)
+    estado_nuevo = Column(String(50), nullable=False)
+    razon_cambio = Column(String(300), nullable=True)
+    fecha = Column(DateTime(timezone=True), server_default=func.now(), index=True)
+
+
+class EventoWebhookStripe(Base):
+    """
+    Modelo para la tabla EventoWebhookStripe
+    Auditoría de eventos webhook recibidos de Stripe
+    """
+    __tablename__ = 'EventoWebhookStripe'
+
+    id = Column(Integer, primary_key=True, index=True, autoincrement=True)
+    event_id = Column(String(100), unique=True, nullable=False, index=True)  # Stripe webhook ID
+    event_type = Column(String(100), nullable=False, index=True)  # payment_intent.succeeded, etc
+    payload = Column(String(4000), nullable=True)  # JSON payload (truncated if needed)
+    transaccion_id = Column(Integer, ForeignKey('TransaccionPago.id', ondelete='SET NULL'), nullable=True, index=True)
+    procesado = Column(Boolean, default=False, nullable=False)
+    resultado = Column(String(300), nullable=True)
+    fecha_recibido = Column(DateTime(timezone=True), server_default=func.now(), index=True)
+    fecha_procesado = Column(DateTime(timezone=True), nullable=True)
