@@ -31,8 +31,9 @@ services:
       - ADMIN_EMAIL=admin@gmail.com
       - ADMIN_PASSWORD=Admin123!@#
       - SECRET_KEY=your-secret-key-change-in-production
+      - BACKEND_LOG_FILE=/var/log/backend/app.log
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/docs"]
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
       interval: 30s
       timeout: 10s
       retries: 5
@@ -42,6 +43,7 @@ services:
       - distribuidora-network
     volumes:
       - ./backend/api/app/uploads:/app/uploads   # persistir uploads entre reinicios y hacerlo accesible desde contenedor
+      - ./logs/backend:/var/log/backend
 
   worker:
     build:

@@ -7,23 +7,36 @@ import logging
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Depends
+from fastapi.routing import APIRouter
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
 from fastapi.staticfiles import StaticFiles
 
 from app.config import settings
-from app.database import init_db, close_db
+from app.database import init_db, close_db, get_db
 from app.middleware.error_handler import setup_error_handlers
 from app.utils.rabbitmq import rabbitmq_producer
 
 # Configure logging
-logging.basicConfig(
-    level=logging.INFO if settings.DEBUG else logging.WARNING,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-)
+log_level = logging.INFO if settings.DEBUG else logging.WARNING
+logging.basicConfig(level=log_level, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
-from app.routers import (
+
+# Optional file logging if BACKEND_LOG_FILE or APP_LOG_FILE is set
+_log_file = os.getenv("BACKEND_LOG_FILE") or os.getenv("APP_LOG_FILE")
+if _log_file:
+    try:
+        os.makedirs(os.path.dirname(_log_file), exist_ok=True)
+        file_handler = logging.FileHandler(_log_file, encoding="utf-8")
+        file_handler.setLevel(log_level)
+        file_handler.setFormatter(logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s'))
+        root_logger = logging.getLogger()
+        root_logger.addHandler(file_handler)
+        logger.info(f"File logging enabled at {_log_file}")
+    except Exception as e:
+        logger.warning(f"Could not set up file logging: {e}")
+from app.presentation.routers.__all__ import (
     auth_router,
     categories_router,
     products_router,
@@ -139,6 +152,34 @@ setup_error_handlers(app)
 
 
 # Health check endpoint
+@app.get("/health")
+def health():
+    return {"status": "ok"}
+
+# Minimal admin read-only endpoints for tests
+from sqlalchemy.orm import Session
+from app.models import Usuario
+
+admin_router = APIRouter(prefix="/api/admin", tags=["admin-utils"])
+
+@admin_router.get("/exists")
+def admin_exists(email: str, db: Session = Depends(get_db)):
+    try:
+        exists = db.query(Usuario).filter(Usuario.email == email, Usuario.es_admin == True).first() is not None
+        return {"exists": bool(exists)}
+    except Exception as e:
+        logger.error(f"Error checking admin exists: {e}")
+        return {"exists": False}
+
+
+@admin_router.get("/count")
+def admin_count(db: Session = Depends(get_db)):
+    try:
+        count = db.query(Usuario).filter(Usuario.es_admin == True).count()
+        return {"count": int(count)}
+    except Exception as e:
+        logger.error(f"Error counting admins: {e}")
+        return {"count": 0}
 
 
 
@@ -157,8 +198,11 @@ app.include_router(home_products_router, tags=["home-products"])
 app.include_router(ratings_public_router, tags=["ratings"])
 app.include_router(ratings_admin_router, tags=["admin-ratings"])
 
+# Test utilities router
+app.include_router(admin_router)
+
 # Public routers (frontend)
-from app.routers.carousel import public_router as carousel_public_router
+from app.presentation.routers.carousel import public_router as carousel_public_router
 app.include_router(carousel_public_router)
 
 
