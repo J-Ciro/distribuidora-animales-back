@@ -36,20 +36,16 @@ if _log_file:
         logger.info(f"File logging enabled at {_log_file}")
     except Exception as e:
         logger.warning(f"Could not set up file logging: {e}")
-from app.presentation.routers.__all__ import (
-    auth_router,
-    categories_router,
-    products_router,
-    inventory_router,
-    carousel_router,
-    orders_router,
-    orders_public_router,
-    admin_users_router,
-    home_products_router,
-    ratings_public_router,
-    ratings_admin_router
-)
-from app.routers import public_orders
+from app.routers.auth import router as auth_router
+from app.routers.categories import router as categories_router
+from app.routers.products import router as products_router
+from app.routers.inventory import router as inventory_router
+from app.routers.carousel import router as carousel_router
+from app.routers.orders import router as orders_router
+from app.routers.public_orders import router as orders_public_router
+from app.routers.admin_users import router as admin_users_router
+from app.routers.home_products import router as home_products_router
+from app.routers.ratings import public_router as ratings_public_router, admin_router as ratings_admin_router
 
 
 @asynccontextmanager
