@@ -198,7 +198,7 @@ app.include_router(ratings_admin_router, tags=["admin-ratings"])
 app.include_router(admin_router)
 
 # Public routers (frontend)
-from app.presentation.routers.carousel import public_router as carousel_public_router
+from app.routers.carousel import public_router as carousel_public_router
 app.include_router(carousel_public_router)
 
 
