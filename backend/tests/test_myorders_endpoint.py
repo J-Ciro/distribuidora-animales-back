@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Test endpoint my-orders directly"""
+"""Test endpoint mis-pedidos directly"""
 import sys
 import json
 sys.path.insert(0, '/app')

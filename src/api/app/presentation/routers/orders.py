@@ -378,7 +378,7 @@ async def create_customer_order(payload: PedidoCreate, db: Session = Depends(get
 	return _pedido_to_response(db, pedido)
 
 
-@public_router.get("/my-orders", response_model=List[PedidoResponse])
+@public_router.get("/mis-pedidos", response_model=List[PedidoResponse])
 async def get_my_orders(
 	skip: int = Query(0, ge=0),
 	limit: int = Query(20, ge=1, le=100),

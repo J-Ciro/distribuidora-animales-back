@@ -278,7 +278,13 @@ async def update_order_status(
     Update order status
     
     Requirements (HU_MANAGE_ORDERS):
-    - Valid status: Pendiente, Enviado, Entregado, Cancelado
+    - Valid status: Pendiente, Pagado, Enviado, Entregado, Cancelado
+    - Valid transitions:
+      * Pendiente → Pagado (only via payment confirmation)
+      * Pagado → Enviado, Cancelado
+      * Enviado → Entregado, Cancelado
+      * Entregado → (final state, no changes allowed)
+      * Cancelado → (final state, no changes allowed)
     - Create audit entry in PedidosHistorialEstado
     - Record estado change with timestamp and usuario_id
     - Publishes pedido.estado.cambiar queue message
@@ -474,7 +480,7 @@ async def create_customer_order(payload: PedidoCreate, db: Session = Depends(get
     return _pedido_to_response(db, pedido)
 
 
-@public_router.get("/my-orders", response_model=List[PedidoResponse])
+@public_router.get("/mis-pedidos", response_model=List[PedidoResponse])
 async def get_my_orders(
     skip: int = Query(0, ge=0),
     limit: int = Query(20, ge=1, le=100),

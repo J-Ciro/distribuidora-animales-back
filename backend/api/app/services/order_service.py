@@ -100,16 +100,18 @@ class OrderService:
         Update order status with validation and audit trail
         
         Valid state transitions:
-        - "Pendiente" → "Pagado" (payment confirmed)
-        - "Pagado" → "En Proceso" (processing for shipment)
-        - "En Proceso" → "Enviado" (shipped to customer)
+        - "Pendiente" → "Pagado" (payment confirmed - only via payment system)
+        - "Pagado" → "Enviado" (shipped to customer)
+        - "Pagado" → "Cancelado" (order cancelled)
         - "Enviado" → "Entregado" (delivered)
-        - Any status → "Cancelado" (cancellation)
+        - "Enviado" → "Cancelado" (order cancelled)
+        - "Entregado" → (final state, no changes allowed)
+        - "Cancelado" → (final state, no changes allowed)
         
         Args:
             db: Database session
             pedido_id: ID of the Pedido
-            new_status: New status (Pendiente, Pagado, En Proceso, Enviado, Entregado, Cancelado)
+            new_status: New status (Pendiente, Pagado, Enviado, Entregado, Cancelado)
             razon: Reason for status change (optional)
         
         Returns:
@@ -139,12 +141,11 @@ class OrderService:
             
             # Define valid state transitions
             valid_transitions = {
-                "Pendiente": ["Pagado", "Cancelado"],
-                "Pagado": ["En Proceso", "Cancelado"],
-                "En Proceso": ["Enviado", "Cancelado"],
-                "Enviado": ["Entregado", "Cancelado"],
-                "Entregado": ["Cancelado"],  # Can't go back
-                "Cancelado": []  # Final state
+                "Pendiente": ["Pagado", "Cancelado"],  # Solo puede cambiar cuando se confirma el pago o se cancela
+                "Pagado": ["Enviado", "Cancelado"],     # Admin puede marcar como enviado o cancelar
+                "Enviado": ["Entregado", "Cancelado"],   # Admin puede marcar como entregado o cancelar
+                "Entregado": [],                         # Estado final - no se puede cambiar
+                "Cancelado": []                          # Estado final - no se puede cambiar
             }
             
             # Validate transition
