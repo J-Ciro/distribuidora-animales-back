@@ -2,7 +2,7 @@
 Public orders router: Create and view orders for authenticated users
 Handles user order creation and retrieval
 """
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.orm import Session
 from sqlalchemy import desc
 from typing import List
@@ -216,6 +216,41 @@ async def get_user_orders(
         )
 
 
+@router.get("/mis-pedidos", response_model=List[PedidoResponse])
+async def get_my_orders(
+    skip: int = Query(0, ge=0),
+    limit: int = Query(20, ge=1, le=100),
+    db: Session = Depends(get_db),
+    current_user: UsuarioPublicResponse = Depends(get_current_user)
+):
+    """
+    Get orders for authenticated user with pagination
+    
+    Returns:
+    - All orders for the current user
+    - Sorted by fecha_creacion DESC (newest first)
+    - Includes order items and product details
+    - Pagination support
+    """
+    try:
+        pedidos = (
+            db.query(models.Pedido)
+            .filter(models.Pedido.usuario_id == current_user.id)
+            .order_by(desc(models.Pedido.fecha_creacion))
+            .offset(skip)
+            .limit(limit)
+            .all()
+        )
+        
+        return [_pedido_to_response(db, p) for p in pedidos]
+    except Exception as e:
+        logger.error(f"Error fetching user orders: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail={"status": "error", "message": "Error al cargar los pedidos."}
+        )
+
+
 @router.get("/{pedido_id}", response_model=PedidoResponse)
 async def get_user_order(
     pedido_id: int,
@@ -246,4 +281,3 @@ async def get_user_order(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail={"status": "error", "message": "Error al obtener el pedido."}
         )
-

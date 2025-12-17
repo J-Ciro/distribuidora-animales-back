@@ -15,6 +15,9 @@ class Settings(BaseSettings):
     DEBUG: bool = False
     API_VERSION: str = "1.0.0"
     
+    # Frontend URL (for password reset links, email templates, etc)
+    FRONTEND_URL: str = "http://localhost:3000"
+    
     # Database (SQL Server)
     DB_SERVER: str = "localhost"
     DB_PORT: int = 1433
@@ -53,9 +56,21 @@ class Settings(BaseSettings):
     
     # Email Configuration
     SMTP_SERVER: str = "smtp.gmail.com"
+    SMTP_HOST: str = "smtp.gmail.com"
     SMTP_PORT: int = 587
-    SMTP_USER: str = "your-email@gmail.com"
-    SMTP_PASSWORD: str = "your-app-password"
+    SMTP_USER: str = ""
+    SMTP_PASSWORD: str = ""
+    SMTP_PASS: str = ""
+    EMAIL_FROM_NAME: str = ""
+    EMAIL_FROM_ADDRESS: str = ""
+    
+    # Admin Configuration
+    ADMIN_EMAIL: str = ""
+    ADMIN_PASSWORD: str = ""
+    SEED_ADMIN_FORCE_ERROR: int = 0
+    
+    # Logging
+    BACKEND_LOG_FILE: str = "/var/log/backend/app.log"
     
     # File Upload
     UPLOAD_DIR: str = "./uploads"
@@ -71,6 +86,11 @@ class Settings(BaseSettings):
     MAX_VERIFICATION_ATTEMPTS: int = 5
     MAX_RESEND_CODE_ATTEMPTS: int = 3
     RESEND_CODE_WINDOW_MINUTES: int = 60
+    
+    # Stripe Payment Gateway
+    STRIPE_SECRET_KEY: str = ""
+    STRIPE_PUBLISHABLE_KEY: str = ""
+    STRIPE_WEBHOOK_SECRET: str = ""
     
     class Config:
         env_file = ".env"

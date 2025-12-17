@@ -11,28 +11,10 @@ services:
         condition: service_healthy
       sqlserver:
         condition: service_healthy
-    environment:
-      - RABBITMQ_URL=amqp://guest:guest@rabbitmq:5672/
-      - DB_SERVER=sqlserver
-      - DB_PORT=1433
-      - DB_NAME=distribuidora_db
-      - DB_USER=SA
-      - DB_PASSWORD=yourStrongPassword123#
-      - RABBITMQ_HOST=rabbitmq
-      - RABBITMQ_PORT=5672
-      - RABBITMQ_USER=guest
-      - RABBITMQ_PASSWORD=guest
-      - SMTP_SERVER=smtp.gmail.com
-      - SMTP_PORT=587
-      - SMTP_USER=distribuidoraperrosgatos@gmail.com
-      - SMTP_PASSWORD=ximz ubff zigp wnxj
-      - EMAIL_FROM_NAME=Soft PetPlace
-      - EMAIL_FROM_ADDRESS=distribuidoraperrosgatos@gmail.com
-      - ADMIN_EMAIL=admin@gmail.com
-      - ADMIN_PASSWORD=Admin123!@#
-      - SECRET_KEY=your-secret-key-change-in-production
+    env_file:
+      - .env
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/docs"]
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
       interval: 30s
       timeout: 10s
       retries: 5
@@ -42,6 +24,7 @@ services:
       - distribuidora-network
     volumes:
       - ./backend/api/app/uploads:/app/uploads   # persistir uploads entre reinicios y hacerlo accesible desde contenedor
+      - ./logs/backend:/var/log/backend
 
   worker:
     build:
@@ -53,24 +36,8 @@ services:
         condition: service_healthy
       sqlserver:
         condition: service_healthy
-    environment:
-      - RABBITMQ_URL=amqp://guest:guest@rabbitmq:5672/
-      - SMTP_HOST=smtp.gmail.com
-      - SMTP_PORT=587
-      - SMTP_USER=distribuidoraperrosgatos@gmail.com
-      - SMTP_PASS=ximz ubff zigp wnxj
-      - SMTP_PASSWORD=ximz ubff zigp wnxj
-      - EMAIL_FROM_NAME=Soft PetPlace
-      - EMAIL_FROM_ADDRESS=distribuidoraperrosgatos@gmail.com
-      - DB_SERVER=sqlserver
-      - DB_PORT=1433
-      - DB_NAME=distribuidora_db
-      - DB_USER=SA
-      - DB_PASSWORD=yourStrongPassword123#
-      - RABBITMQ_HOST=rabbitmq
-      - RABBITMQ_PORT=5672
-      - RABBITMQ_USER=guest
-      - RABBITMQ_PASSWORD=guest
+    env_file:
+      - .env
     restart: unless-stopped
     networks:
       - distribuidora-network
@@ -97,13 +64,8 @@ services:
     hostname: sqlserver
     ports:
       - "1433:1433"
-    environment:
-      - ACCEPT_EULA=Y
-      - SA_PASSWORD=yourStrongPassword123#
-      - MSSQL_PID=Developer
-      - MSSQL_AGENT_ENABLED=true
-      - MSSQL_TCP_PORT=1433
-      - MSSQL_COLLATION=SQL_Latin1_General_CP1_CI_AS
+    env_file:
+      - .env
     volumes:
       - sqlserver_data:/var/opt/mssql
     deploy:
@@ -113,7 +75,7 @@ services:
         reservations:
           memory: 2G
     healthcheck:
-      test: ["CMD-SHELL", "timeout 5 /opt/mssql-tools18/bin/sqlcmd -S localhost,1433 -U SA -P 'yourStrongPassword123#' -Q 'SELECT 1' > /dev/null 2>&1 && echo 0 || echo 1"]
+      test: ["CMD-SHELL", "timeout 5 /opt/mssql-tools18/bin/sqlcmd -S localhost,1433 -U SA -P '${SA_PASSWORD}' -Q 'SELECT 1' > /dev/null 2>&1 && echo 0 || echo 1"]
       interval: 10s
       timeout: 5s
       retries: 20

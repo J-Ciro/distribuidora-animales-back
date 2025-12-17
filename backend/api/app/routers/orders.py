@@ -120,6 +120,18 @@ async def list_orders(
 
 @router.post("/", response_model=PedidoResponse, status_code=status.HTTP_201_CREATED)
 async def create_order(payload: PedidoCreate, db: Session = Depends(get_db)):
+    """
+    Create a new order (Pendiente de Pago)
+    
+    IMPORTANT: Stock is NOT deducted here.
+    Stock is only deducted after payment confirmation in POST /api/pagos/confirm-payment
+    
+    This allows:
+    - User can add items to cart and create order
+    - User completes payment with Stripe
+    - Only then is stock deducted (atomic transaction)
+    - If payment fails, stock remains unchanged
+    """
     # Validate usuario exists
     usuario = db.query(models.Usuario).filter(models.Usuario.id == payload.usuario_id).first()
     if not usuario:
@@ -128,6 +140,7 @@ async def create_order(payload: PedidoCreate, db: Session = Depends(get_db)):
     pedido = models.Pedido(
         usuario_id=payload.usuario_id,
         estado='Pendiente',
+        estado_pago='Pendiente de Pago',  # NEW: Track payment status separately
         direccion_entrega=payload.direccion_entrega,
         municipio=payload.municipio,
         departamento=payload.departamento,
@@ -146,7 +159,8 @@ async def create_order(payload: PedidoCreate, db: Session = Depends(get_db)):
         cantidad = int(it.get('cantidad'))
         precio = float(it.get('precio_unitario')) if it.get('precio_unitario') is not None else 0.0
         
-        # Verificar y descontar stock del producto usando SQL directo
+        # Verificar que el producto existe y hay stock disponible
+        # NOTE: We verify stock availability but DO NOT deduct it yet
         query_producto = text("""
             SELECT id, nombre, cantidad_disponible 
             FROM Productos 
@@ -169,13 +183,11 @@ async def create_order(payload: PedidoCreate, db: Session = Depends(get_db)):
                 detail=f"Stock insuficiente para {producto.nombre}. Disponible: {producto.cantidad_disponible}, Solicitado: {cantidad}"
             )
         
-        # Descontar el stock
-        update_stock = text("""
-            UPDATE Productos 
-            SET cantidad_disponible = cantidad_disponible - :cantidad 
-            WHERE id = :producto_id
-        """)
-        db.execute(update_stock, {"cantidad": cantidad, "producto_id": producto_id})
+        # NOTE: Stock deduction is NOT done here - it happens in confirm-payment endpoint
+        # This ensures:
+        # 1. Stock is only deducted AFTER payment succeeds
+        # 2. If payment fails, stock is not wasted
+        # 3. Stock changes are atomic with payment confirmation
         
         total += cantidad * precio
         pi = models.PedidoItem(
@@ -190,6 +202,8 @@ async def create_order(payload: PedidoCreate, db: Session = Depends(get_db)):
     db.add(pedido)
     db.commit()
     db.refresh(pedido)
+
+    logger.info(f"Order created: pedido_id={pedido.id}, usuario_id={pedido.usuario_id}, estado_pago=Pendiente de Pago, total={total}")
 
     return _pedido_to_response(db, pedido)
 
@@ -264,7 +278,13 @@ async def update_order_status(
     Update order status
     
     Requirements (HU_MANAGE_ORDERS):
-    - Valid status: Pendiente, Enviado, Entregado, Cancelado
+    - Valid status: Pendiente, Pagado, Enviado, Entregado, Cancelado
+    - Valid transitions:
+      * Pendiente → Pagado (only via payment confirmation)
+      * Pagado → Enviado, Cancelado
+      * Enviado → Entregado, Cancelado
+      * Entregado → (final state, no changes allowed)
+      * Cancelado → (final state, no changes allowed)
     - Create audit entry in PedidosHistorialEstado
     - Record estado change with timestamp and usuario_id
     - Publishes pedido.estado.cambiar queue message
@@ -483,7 +503,7 @@ async def create_customer_order(
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Error interno al procesar el pedido.")
 
 
-@public_router.get("/my-orders", response_model=List[PedidoResponse])
+@public_router.get("/mis-pedidos", response_model=List[PedidoResponse])
 async def get_my_orders(
     skip: int = Query(0, ge=0),
     limit: int = Query(20, ge=1, le=100),
