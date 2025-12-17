@@ -72,6 +72,11 @@ class Settings(BaseSettings):
     MAX_RESEND_CODE_ATTEMPTS: int = 3
     RESEND_CODE_WINDOW_MINUTES: int = 60
     
+    # Stripe Payment Gateway
+    STRIPE_SECRET_KEY: str = ""
+    STRIPE_PUBLISHABLE_KEY: str = ""
+    STRIPE_WEBHOOK_SECRET: str = ""
+    
     class Config:
         env_file = ".env"
         case_sensitive = True

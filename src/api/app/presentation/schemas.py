@@ -1,5 +1,5 @@
 """
-Pydantic schemas for request/response validation
+Pydantic schemas for request/response validation (moved to presentation layer)
 """
 from pydantic import BaseModel, EmailStr, Field, field_validator
 from typing import Optional, List
@@ -257,7 +257,7 @@ class PedidoCreate(BaseModel):
     direccion_entrega: str = Field(..., min_length=10)
     municipio: Optional[str] = Field(None, max_length=100)
     departamento: Optional[str] = Field(None, max_length=100)
-    pais: Optional[str] = Field('Colombia', max_length=100)
+    pais: Optional[str] = 'Colombia'
     telefono_contacto: str = Field(..., pattern=r"^\d{7,15}$")
     metodo_pago: Optional[str] = Field('Efectivo', pattern=r"^(Tarjeta|Efectivo|Daviplata|Nequi|Addi|Sistecredito)$")
     nota_especial: Optional[str] = Field(None, max_length=500)
@@ -460,122 +460,3 @@ class CalificacionesListResponse(BaseModel):
     status: str = "success"
     data: List[CalificacionResponse] = []
     meta: Optional[MetaPage] = None
-
-
-# Stripe Payment Schemas (US-FUNC-01)
-
-class CreatePaymentIntentRequest(BaseModel):
-    """Request schema for creating a payment intent with Stripe"""
-    pedido_id: int = Field(..., description="Order ID to associate with payment")
-    amount: float = Field(..., gt=0, description="Amount in cents (e.g., 9999 for $99.99)")
-    currency: str = Field("USD", pattern="^[A-Z]{3}$", description="ISO 4217 currency code")
-    
-    class Config:
-        json_schema_extra = {
-            "example": {
-                "pedido_id": 1,
-                "amount": 9999,
-                "currency": "USD"
-            }
-        }
-
-
-class PaymentIntentResponse(BaseModel):
-    """Response schema after creating a payment intent"""
-    id: str = Field(..., description="Stripe Payment Intent ID")
-    client_secret: str = Field(..., description="Client secret for frontend to complete payment")
-    amount: float = Field(..., description="Amount in cents")
-    currency: str = Field(..., description="Currency code")
-    status: str = Field(..., description="Payment intent status (requires_payment_method, succeeded, etc)")
-    stripe_public_key: str = Field(..., description="Stripe public key for frontend")
-    
-    class Config:
-        json_schema_extra = {
-            "example": {
-                "id": "pi_test_12345",
-                "client_secret": "pi_test_12345_secret",
-                "amount": 9999,
-                "currency": "USD",
-                "status": "requires_payment_method",
-                "stripe_public_key": "pk_test_xxx"
-            }
-        }
-
-
-class PaymentConfirmationRequest(BaseModel):
-    """Request schema for confirming a payment"""
-    payment_intent_id: str = Field(..., description="Stripe Payment Intent ID to confirm")
-    pedido_id: int = Field(..., description="Associated order ID")
-    
-    class Config:
-        json_schema_extra = {
-            "example": {
-                "payment_intent_id": "pi_test_12345",
-                "pedido_id": 1
-            }
-        }
-
-
-class PaymentStatusResponse(BaseModel):
-    """Response schema for payment status and confirmation"""
-    status: str = Field(..., description="Status: success or error")
-    message: str = Field(..., description="Human-readable message")
-    pedido_id: Optional[int] = Field(None, description="Associated order ID")
-    transaccion_id: Optional[int] = Field(None, description="Transaction record ID in database")
-    payment_intent_id: Optional[str] = Field(None, description="Stripe Payment Intent ID")
-    
-    class Config:
-        json_schema_extra = {
-            "example": {
-                "status": "success",
-                "message": "Payment confirmed successfully",
-                "pedido_id": 1,
-                "transaccion_id": 42,
-                "payment_intent_id": "pi_test_12345"
-            }
-        }
-
-
-class PaymentStatusQueryResponse(BaseModel):
-    """Response schema for querying payment status"""
-    payment_intent_id: str = Field(..., description="Stripe Payment Intent ID")
-    status: str = Field(..., description="Current status from Stripe")
-    amount: float = Field(..., description="Amount in cents")
-    currency: str = Field(..., description="Currency code")
-    
-    class Config:
-        json_schema_extra = {
-            "example": {
-                "payment_intent_id": "pi_test_12345",
-                "status": "succeeded",
-                "amount": 9999,
-                "currency": "USD"
-            }
-        }
-
-
-class TransaccionPagoResponse(BaseModel):
-    """Response schema for payment transaction details"""
-    id: int
-    pedido_id: int
-    payment_intent_id: str
-    usuario_id: int
-    monto: float
-    moneda: str
-    estado: str
-    metodo_pago: Optional[str]
-    detalles_error: Optional[str]
-    fecha_creacion: datetime
-    fecha_actualizacion: datetime
-    fecha_confirmacion: Optional[datetime]
-    
-    class Config:
-        from_attributes = True
-
-
-class TransaccionPagoListResponse(BaseModel):
-    """Response schema for list of payment transactions"""
-    status: str = "success"
-    data: List[TransaccionPagoResponse] = []
-    meta: Optional[MetaPage] = None
-

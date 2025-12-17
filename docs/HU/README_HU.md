@@ -25,7 +25,7 @@ Este directorio contiene **todas las Historias de Usuario (HU)** documentadas pa
 | 9 | `INSTRUCTIONS_HU_MANAGE_USERS.md` | Gestión de Usuarios (Admin) | ✅ Implementado | `GET /api/admin/usuarios`<br>`GET /api/admin/usuarios/{id}`<br>`PUT /api/admin/usuarios/{id}` |
 | 10 | `INSTRUCTIONS_HU_RATINGS_SYSTEM.md` | Sistema de Calificaciones de Productos | ✅ Implementado | `POST /api/calificaciones`<br>`GET /api/calificaciones/producto/{id}`<br>`GET /api/calificaciones/producto/{id}/stats`<br>`PUT /api/calificaciones/{id}`<br>`DELETE /api/calificaciones/{id}`<br>`GET /api/admin/calificaciones` |
 | 11 | `INSTRUCTIONS_HU_ADMIN_DASHBOARD.md` | Dashboard y Estadísticas del Administrador | ✅ **NUEVO** | `GET /api/admin/dashboard`<br>`GET /api/admin/analytics/ventas`<br>`GET /api/admin/analytics/productos/top`<br>`GET /api/admin/analytics/usuarios/activos`<br>`GET /api/admin/analytics/pedidos/estados`<br>`GET /api/admin/analytics/categorias/ventas`<br>`GET /api/admin/analytics/calificaciones/resumen` |
-| 12 | `INSTRUCTIONS_HU_MY_ORDERS.md` | Mis Pedidos - Vista de Cliente | ✅ **NUEVO** | `GET /api/pedidos/my-orders`<br>`GET /api/pedidos/my-orders/{id}`<br>`GET /api/pedidos/my-orders/{id}/historial`<br>`POST /api/pedidos/my-orders/{id}/cancelar` |
+| 12 | `INSTRUCTIONS_HU_MY_ORDERS.md` | Mis Pedidos - Vista de Cliente | ✅ **NUEVO** | `GET /api/pedidos/mis-pedidos`<br>`GET /api/pedidos/mis-pedidos/{id}`<br>`GET /api/pedidos/mis-pedidos/{id}/historial`<br>`POST /api/pedidos/mis-pedidos/{id}/cancelar` |
 
 ---
 

@@ -41,7 +41,7 @@ Tablas principales:
 
 ## 🔗 Flujo Backend
 
-1. Cliente autenticado solicita `GET /api/pedidos/my-orders`
+1. Cliente autenticado solicita `GET /api/pedidos/mis-pedidos`
 2. Producer (FastAPI) valida JWT y extrae `usuario_id`
 3. Query filtra `Pedidos WHERE usuario_id = :usuario_id`
 4. Para cada pedido, obtener items desde `PedidoItems`
@@ -54,7 +54,7 @@ Tablas principales:
 ### **Listar mis pedidos**
 
 - **Método**: `GET`
-- **Ruta**: `/api/pedidos/my-orders` o `/api/orders/my-orders`
+- **Ruta**: `/api/pedidos/mis-pedidos` o `/api/orders/mis-pedidos`
 - **Auth**: Requiere usuario autenticado (JWT)
 - **Query params**:
   - `skip` (default: 0)
@@ -105,7 +105,7 @@ Tablas principales:
 ### **Obtener detalle de un pedido**
 
 - **Método**: `GET`
-- **Ruta**: `/api/pedidos/my-orders/{pedido_id}`
+- **Ruta**: `/api/pedidos/mis-pedidos/{pedido_id}`
 - **Auth**: Requiere usuario autenticado
 - **Validación**: Verificar que `pedido.usuario_id == current_user.id`
 - **Respuesta**:
@@ -170,7 +170,7 @@ Tablas principales:
 ### **Obtener historial de estados de un pedido**
 
 - **Método**: `GET`
-- **Ruta**: `/api/pedidos/my-orders/{pedido_id}/historial`
+- **Ruta**: `/api/pedidos/mis-pedidos/{pedido_id}/historial`
 - **Auth**: Requiere usuario autenticado
 - **Validación**: Verificar pertenencia del pedido
 - **Respuesta**:
@@ -202,7 +202,7 @@ Tablas principales:
 ### **Cancelar un pedido** (opcional)
 
 - **Método**: `POST`
-- **Ruta**: `/api/pedidos/my-orders/{pedido_id}/cancelar`
+- **Ruta**: `/api/pedidos/mis-pedidos/{pedido_id}/cancelar`
 - **Auth**: Requiere usuario autenticado
 - **Validaciones**:
   - Solo se puede cancelar si `estado == 'Pendiente de envío'`
@@ -231,7 +231,7 @@ Tablas principales:
 
 **Ubicación**: `src/pages/MyOrdersPage.jsx`
 
-**Ruta**: `/mi-cuenta/pedidos` o `/my-orders`
+**Ruta**: `/mi-cuenta/pedidos` o `/mis-pedidos`
 
 **Estructura**:
 ```jsx
@@ -279,7 +279,7 @@ const MyOrdersPage = () => {
   };
 
   return (
-    <div className="my-orders-page">
+    <div className="mis-pedidos-page">
       <div className="page-header">
         <h1>Mis Pedidos</h1>
         <p className="subtitle">Historial completo de tus compras</p>
@@ -573,7 +573,7 @@ import apiClient from './api-client';
 class PedidosService {
   // Obtener mis pedidos
   async getMyOrders({ skip = 0, limit = 20, estado } = {}) {
-    const response = await apiClient.get('/pedidos/my-orders', {
+    const response = await apiClient.get('/pedidos/mis-pedidos', {
       params: { skip, limit, estado }
     });
     return response.data.data || response.data;
@@ -581,19 +581,19 @@ class PedidosService {
 
   // Obtener detalle de mi pedido
   async getMyOrderDetail(pedidoId) {
-    const response = await apiClient.get(`/pedidos/my-orders/${pedidoId}`);
+    const response = await apiClient.get(`/pedidos/mis-pedidos/${pedidoId}`);
     return response.data.data || response.data;
   }
 
   // Obtener historial de estados
   async getMyOrderHistory(pedidoId) {
-    const response = await apiClient.get(`/pedidos/my-orders/${pedidoId}/historial`);
+    const response = await apiClient.get(`/pedidos/mis-pedidos/${pedidoId}/historial`);
     return response.data.data || response.data;
   }
 
   // Cancelar mi pedido
   async cancelMyOrder(pedidoId, data) {
-    const response = await apiClient.post(`/pedidos/my-orders/${pedidoId}/cancelar`, data);
+    const response = await apiClient.post(`/pedidos/mis-pedidos/${pedidoId}/cancelar`, data);
     return response.data;
   }
 }
@@ -606,7 +606,7 @@ export const pedidosService = new PedidosService();
 ## 🎨 Estilos CSS
 
 ```css
-.my-orders-page {
+.mis-pedidos-page {
   max-width: 1200px;
   margin: 0 auto;
   padding: 24px;
@@ -749,12 +749,12 @@ export const pedidosService = new PedidosService();
 ## ✅ Criterios de Aceptación
 
 ### AC 1: Cliente ve todos sus pedidos
-- **Endpoint**: `GET /api/pedidos/my-orders`
+- **Endpoint**: `GET /api/pedidos/mis-pedidos`
 - **Ordenamiento**: Más recientes primero
 - **Filtros**: Por estado
 
 ### AC 2: Detalle de pedido con items
-- **Endpoint**: `GET /api/pedidos/my-orders/{id}`
+- **Endpoint**: `GET /api/pedidos/mis-pedidos/{id}`
 - **Incluye**: Lista de productos, cantidades, precios
 - **Validación**: Solo el dueño puede ver
 
@@ -799,10 +799,10 @@ Mensajes:
 ## ✅ Checklist Técnico
 
 ### Backend
-- [ ] Endpoint `GET /api/pedidos/my-orders` con filtros y paginación
-- [ ] Endpoint `GET /api/pedidos/my-orders/{id}` con validación de pertenencia
-- [ ] Endpoint `GET /api/pedidos/my-orders/{id}/historial`
-- [ ] Endpoint `POST /api/pedidos/my-orders/{id}/cancelar`
+- [ ] Endpoint `GET /api/pedidos/mis-pedidos` con filtros y paginación
+- [ ] Endpoint `GET /api/pedidos/mis-pedidos/{id}` con validación de pertenencia
+- [ ] Endpoint `GET /api/pedidos/mis-pedidos/{id}/historial`
+- [ ] Endpoint `POST /api/pedidos/mis-pedidos/{id}/cancelar`
 - [ ] Validación de autenticación en todos los endpoints
 - [ ] Verificación de pertenencia del pedido al usuario
 

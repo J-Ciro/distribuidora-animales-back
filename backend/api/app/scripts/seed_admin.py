@@ -16,10 +16,22 @@ import pyodbc
 from passlib.context import CryptContext
 
 # Configure logging
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - [%(levelname)s] - %(message)s'
-)
+log_file = os.getenv("BACKEND_LOG_FILE")
+if log_file:
+    os.makedirs(os.path.dirname(log_file), exist_ok=True)
+    logging.basicConfig(
+        level=logging.INFO,
+        format='%(asctime)s - [%(levelname)s] - %(message)s',
+        handlers=[
+            logging.FileHandler(log_file, encoding="utf-8"),
+            logging.StreamHandler()
+        ]
+    )
+else:
+    logging.basicConfig(
+        level=logging.INFO,
+        format='%(asctime)s - [%(levelname)s] - %(message)s'
+    )
 logger = logging.getLogger(__name__)
 
 # Password hashing context (same as in app.utils.security)
@@ -42,7 +54,7 @@ class AdminSeeder:
         self.db_port = os.getenv('DB_PORT', '1433')
         
         # Admin credentials from environment
-        self.admin_email = os.getenv('ADMIN_EMAIL', 'admin@gmail.com')
+        self.admin_email = os.getenv('ADMIN_EMAIL', 'admin@gmail.com')  # Corrected line
         self.admin_password = os.getenv('ADMIN_PASSWORD', 'Admin123!@#')
         
         self.connection = None

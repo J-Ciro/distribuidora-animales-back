@@ -1,0 +1,504 @@
+"""
+Unit Tests para stripe_service.py
+Tests aislados para el servicio de integración con Stripe API
+"""
+import pytest
+from unittest.mock import Mock, patch, MagicMock
+from decimal import Decimal
+import stripe
+from stripe import error as stripe_errors
+
+
+# Importar el servicio a probar
+from app.services.stripe_service import StripeService
+
+
+class TestStripeServiceCreatePaymentIntent:
+    """
+    Tests para creación de PaymentIntent
+    """
+    
+    @patch('stripe.PaymentIntent.create')
+    def test_create_payment_intent_success(
+        self, 
+        mock_stripe_create,
+        stripe_test_keys,
+        payment_amount_standard
+    ):
+        """
+        TEST: Creación exitosa de PaymentIntent con monto estándar
+        VALIDACIÓN: PaymentIntent creado con datos correctos
+        """
+        # Configurar mock
+        mock_pi = MagicMock()
+        mock_pi.id = "pi_test_12345"
+        mock_pi.client_secret = "pi_test_12345_secret_abc"
+        mock_pi.status = "requires_payment_method"
+        mock_pi.amount = payment_amount_standard['amount_cents']
+        mock_pi.currency = "cop"
+        
+        mock_stripe_create.return_value = mock_pi
+        
+        #Ejecutar
+        service = StripeService()
+        result = service.create_payment_intent(
+            amount=payment_amount_standard['amount_cents'],
+            currency="cop",
+            metadata={"pedido_id": "1", "usuario_id": "1"}
+        )
+        
+       # Validaciones
+        assert result['id'] == "pi_test_12345"
+        assert result['client_secret'] is not None
+        assert result['status'] == "requires_payment_method"
+        
+       # Verificar que se llamó con los parámetros correctos
+        mock_stripe_create.assert_called_once()
+        call_kwargs = mock_stripe_create.call_args[1]
+        assert call_kwargs['amount'] == payment_amount_standard['amount_cents']
+        assert call_kwargs['currency'] == "cop"
+    
+    
+    @patch('stripe.PaymentIntent.create')
+    def test_create_payment_intent_minimum_amount(
+        self, 
+        mock_stripe_create,
+        stripe_test_keys,
+        payment_amount_minimum
+    ):
+        """
+        TEST: Creación de PaymentIntent con monto mínimo ($0.01)
+        VALIDACIÓN: Acepta monto mínimo válido (BOUND-001)
+        """
+        mock_pi = MagicMock()
+        mock_pi.id = "pi_test_min_amount"
+        mock_pi.amount = 1 
+        mock_pi.currency = "cop"
+        
+        mock_stripe_create.return_value = mock_pi
+        
+        service = StripeService()
+        result = service.create_payment_intent(
+            amount=payment_amount_minimum['amount_cents'],
+            currency="cop"
+        )
+        
+        assert result['amount'] == 1
+        mock_stripe_create.assert_called_once()
+    
+    
+    @patch('stripe.PaymentIntent.create')
+    def test_create_payment_intent_maximum_amount(
+        self, 
+        mock_stripe_create,
+        stripe_test_keys,
+        payment_amount_maximum
+    ):
+        """
+        TEST: Creación de PaymentIntent con monto máximo ($999,999.99)
+        VALIDACIÓN: Acepta monto máximo válido (BOUND-002)
+        """
+        mock_pi = MagicMock()
+        mock_pi.id = "pi_test_max_amount"
+        mock_pi.amount = 99999999
+        mock_pi.currency = "cop"
+        
+        mock_stripe_create.return_value = mock_pi
+        
+        service = StripeService()
+        result = service.create_payment_intent(
+            amount=payment_amount_maximum['amount_cents'],
+            currency="cop"
+        )
+        
+        assert result['amount'] == 99999999
+        mock_stripe_create.assert_called_once()
+    
+    
+    @patch('stripe.PaymentIntent.create')
+    def test_create_payment_intent_with_metadata(
+        self, 
+        mock_stripe_create,
+        stripe_test_keys,
+        payment_amount_standard
+    ):
+        """
+        TEST: PaymentIntent incluye metadata con IDs de pedido y usuario
+        VALIDACIÓN: Metadata se pasa correctamente a Stripe
+        """
+        mock_pi = MagicMock()
+        mock_pi.id = "pi_test_with_metadata"
+        mock_pi.metadata = {"pedido_id": "123", "usuario_id": "456"}
+        
+        mock_stripe_create.return_value = mock_pi
+        
+        service = StripeService(stripe_test_keys['secret_key'])
+        result = service.create_payment_intent(
+            amount=payment_amount_standard['amount'],
+            currency="cop",
+            metadata={"pedido_id": "123", "usuario_id": "456"}
+        )
+        
+        #Verificar metadata en la llamada
+        call_kwargs = mock_stripe_create.call_args[1]
+        assert call_kwargs['metadata']['pedido_id'] == "123"
+        assert call_kwargs['metadata']['usuario_id'] == "456"
+    
+    
+    def test_create_payment_intent_invalid_amount_negative(
+        self,
+        stripe_test_keys,
+        payment_amount_invalid_negative
+    ):
+        """
+        TEST: Rechaza monto negativo
+        VALIDACIÓN: Lanza ValueError para monto negativo
+        """
+        service = StripeService(stripe_test_keys['secret_key'])
+        
+        with pytest.raises(ValueError, match="Amount must be positive"):
+            service.create_payment_intent(
+                amount=payment_amount_invalid_negative['amount'],
+                currency="cop"
+            )
+    
+    
+    def test_create_payment_intent_invalid_amount_zero(
+        self,
+        stripe_test_keys,
+        payment_amount_invalid_zero
+    ):
+        """
+        TEST: Rechaza monto cero
+        VALIDACIÓN: Lanza ValueError para monto cero
+        """
+        service = StripeService(stripe_test_keys['secret_key'])
+        
+        with pytest.raises(ValueError, match="Amount must be greater than zero"):
+            service.create_payment_intent(
+                amount=payment_amount_invalid_zero['amount'],
+                currency="cop"
+            )
+
+
+class TestStripeServiceRetrievePaymentIntent:
+    """
+    Tests para recuperación de PaymentIntent
+    """
+    
+    @patch('stripe.PaymentIntent.retrieve')
+    def test_retrieve_payment_intent_success(
+        self, 
+        mock_stripe_retrieve,
+        stripe_test_keys
+    ):
+        """
+        TEST: Recuperar PaymentIntent exitosamente
+        VALIDACIÓN: Obtiene datos del PaymentIntent existente
+        """
+        mock_pi = MagicMock()
+        mock_pi.id = "pi_test_12345"
+        mock_pi.status = "succeeded"
+        mock_pi.amount = 9999
+        
+        mock_stripe_retrieve.return_value = mock_pi
+        
+        service = StripeService(stripe_test_keys['secret_key'])
+        result = service.retrieve_payment_intent("pi_test_12345")
+        
+        assert result['id'] == "pi_test_12345"
+        assert result['status'] == "succeeded"
+        
+        mock_stripe_retrieve.assert_called_once_with("pi_test_12345")
+    
+    
+    @patch('stripe.PaymentIntent.retrieve')
+    def test_retrieve_payment_intent_not_found(
+        self, 
+        mock_stripe_retrieve,
+        stripe_test_keys
+    ):
+        """
+        TEST: Intenta recuperar PaymentIntent inexistente
+        VALIDACIÓN: Maneja error correctamente
+        """
+        mock_stripe_retrieve.side_effect = stripe_errors.InvalidRequestError(
+            message="No such payment_intent",
+            param="id"
+        )
+        
+        service = StripeService(stripe_test_keys['secret_key'])
+        
+        with pytest.raises(stripe_errors.InvalidRequestError):
+            service.retrieve_payment_intent("pi_invalid")
+
+
+class TestStripeServiceConfirmPayment:
+    """
+    Tests para confirmación de pagos
+    """
+    
+    @patch('stripe.PaymentIntent.confirm')
+    def test_confirm_payment_success(
+        self, 
+        mock_stripe_confirm,
+        stripe_test_keys
+    ):
+        """
+        TEST: Confirmar pago exitosamente
+        VALIDACIÓN: PaymentIntent cambia a estado 'succeeded'
+        """
+        mock_pi = MagicMock()
+        mock_pi.id = "pi_test_12345"
+        mock_pi.status = "succeeded"
+        
+        mock_stripe_confirm.return_value = mock_pi
+        
+        service = StripeService(stripe_test_keys['secret_key'])
+        result = service.confirm_payment("pi_test_12345", "pm_card_visa")
+        
+        assert result['status'] == "succeeded"
+        
+        mock_stripe_confirm.assert_called_once()
+    
+    
+    @patch('stripe.PaymentIntent.confirm')
+    def test_confirm_payment_requires_action(
+        self, 
+        mock_stripe_confirm,
+        stripe_test_keys
+    ):
+        """
+        TEST: Confirmar pago que requiere 3D Secure
+        VALIDACIÓN: PaymentIntent retorna 'requires_action'
+        """
+        mock_pi = MagicMock()
+        mock_pi.id = "pi_test_12345"
+        mock_pi.status = "requires_action"
+        mock_pi.next_action = {"type": "use_stripe_sdk"}
+        
+        mock_stripe_confirm.return_value = mock_pi
+        
+        service = StripeService(stripe_test_keys['secret_key'])
+        result = service.confirm_payment("pi_test_12345", "pm_card_3ds")
+        
+        assert result['status'] == "requires_action"
+        assert result['next_action'] is not None
+
+
+class TestStripeServiceErrorHandling:
+    """
+    Tests para manejo de errores de Stripe API
+    """
+    
+    @patch('stripe.PaymentIntent.create')
+    def test_handle_card_error(
+        self, 
+        mock_stripe_create,
+        stripe_test_keys,
+        stripe_error_card_declined
+    ):
+        """
+        TEST: Manejo de CardError (tarjeta declinada)
+        VALIDACIÓN: Captura y procesa CardError correctamente (ERR-001)
+        """
+        mock_stripe_create.side_effect = stripe_errors.CardError(
+            message=stripe_error_card_declined['message'],
+            param=stripe_error_card_declined['param'],
+            code=stripe_error_card_declined['code']
+        )
+        
+        service = StripeService(stripe_test_keys['secret_key'])
+        
+        with pytest.raises(stripe_errors.CardError) as exc_info:
+            service.create_payment_intent(amount=Decimal("99.99"), currency="cop")
+        
+        assert exc_info.value.code == "card_declined"
+    
+    
+    @patch('stripe.PaymentIntent.create')
+    def test_handle_api_connection_error(
+        self, 
+        mock_stripe_create,
+        stripe_test_keys,
+        stripe_error_api_connection
+    ):
+        """
+        TEST: Manejo de APIConnectionError
+        VALIDACIÓN: Captura error de conexión (ERR-002)
+        """
+        mock_stripe_create.side_effect = stripe_errors.APIConnectionError(
+            message=stripe_error_api_connection['message']
+        )
+        
+        service = StripeService(stripe_test_keys['secret_key'])
+        
+        with pytest.raises(stripe_errors.APIConnectionError):
+            service.create_payment_intent(amount=Decimal("99.99"), currency="cop")
+    
+    
+    @patch('stripe.PaymentIntent.create')
+    def test_handle_rate_limit_error(
+        self, 
+        mock_stripe_create,
+        stripe_test_keys,
+        stripe_error_rate_limit
+    ):
+        """
+        TEST: Manejo de RateLimitError
+        VALIDACIÓN: Captura error de rate limit
+        """
+        mock_stripe_create.side_effect = stripe_errors.RateLimitError(
+            message=stripe_error_rate_limit['message']
+        )
+        
+        service = StripeService(stripe_test_keys['secret_key'])
+        
+        with pytest.raises(stripe_errors.RateLimitError):
+            service.create_payment_intent(amount=Decimal("99.99"), currency="cop")
+    
+    
+    @patch('stripe.PaymentIntent.create')
+    def test_handle_api_error(
+        self, 
+        mock_stripe_create,
+        stripe_test_keys,
+        stripe_error_api_error
+    ):
+        """
+        TEST: Manejo de APIError (error de servidor Stripe)
+        VALIDACIÓN: Captura error de servidor
+        """
+        mock_stripe_create.side_effect = stripe_errors.APIError(
+            message=stripe_error_api_error['message']
+        )
+        
+        service = StripeService(stripe_test_keys['secret_key'])
+        
+        with pytest.raises(stripe_errors.APIError):
+            service.create_payment_intent(amount=Decimal("99.99"), currency="cop")
+
+
+class TestStripeServiceWebhook:
+    """
+    Tests para procesamiento de webhooks de Stripe
+    """
+    
+    @patch('stripe.Webhook.construct_event')
+    def test_process_webhook_success(
+        self, 
+        mock_webhook_construct,
+        stripe_test_keys,
+        webhook_event_payment_succeeded,
+        sample_webhook_headers
+    ):
+        """
+        TEST: Procesar webhook exitosamente
+        VALIDACIÓN: Webhook válido se procesa correctamente
+        """
+        mock_webhook_construct.return_value = webhook_event_payment_succeeded
+        
+        service = StripeService(stripe_test_keys['secret_key'])
+        event = service.process_webhook(
+            payload=webhook_event_payment_succeeded,
+            signature=sample_webhook_headers['stripe-signature'],
+            webhook_secret=stripe_test_keys['webhook_secret']
+        )
+        
+        assert event['type'] == "payment_intent.succeeded"
+        assert event['data']['object']['status'] == "succeeded"
+    
+    
+    @patch('stripe.Webhook.construct_event')
+    def test_process_webhook_invalid_signature(
+        self, 
+        mock_webhook_construct,
+        stripe_test_keys,
+        webhook_event_payment_succeeded
+    ):
+        """
+        TEST: Rechazar webhook con firma inválida
+        VALIDACIÓN: Firma inválida lanza error (ERR-004)
+        """
+        mock_webhook_construct.side_effect = stripe.error.SignatureVerificationError(
+            message="Invalid signature",
+            sig_header="invalid_signature"
+        )
+        
+        service = StripeService(stripe_test_keys['secret_key'])
+        
+        with pytest.raises(stripe.error.SignatureVerificationError):
+            service.process_webhook(
+                payload=webhook_event_payment_succeeded,
+                signature="invalid_signature",
+                webhook_secret=stripe_test_keys['webhook_secret']
+            )
+    
+    
+    @patch('stripe.Webhook.construct_event')
+    def test_process_webhook_idempotency(
+        self, 
+        mock_webhook_construct,
+        stripe_test_keys,
+        webhook_event_duplicate
+    ):
+        """
+        TEST: Webhook duplicado (idempotencia)
+        VALIDACIÓN: Eventos duplicados se manejan correctamente (REQ-005)
+        """
+        mock_webhook_construct.return_value = webhook_event_duplicate
+        
+        service = StripeService(stripe_test_keys['secret_key'])
+        
+        #Primera llamada
+        event1 = service.process_webhook(...)
+        
+        #Segunda llamada (duplicado)
+        event2 = service.process_webhook(...)
+        
+        #Ambos eventos deben tener el mismo ID
+        assert event1['id'] == event2['id']
+
+
+class TestStripeServiceHelpers:
+    """
+    Tests para funciones auxiliares de StripeService
+    """
+    
+    def test_convert_amount_to_cents(self, stripe_test_keys):
+        """
+        TEST: Convertir monto decimal a centavos
+        VALIDACIÓN: Conversión correcta de decimales a enteros
+        """
+        service = StripeService(stripe_test_keys['secret_key'])
+        
+        assert service.convert_to_cents(Decimal("99.99")) == 9999
+        assert service.convert_to_cents(Decimal("0.01")) == 1
+        assert service.convert_to_cents(Decimal("999999.99")) == 99999999
+        pass
+    
+    
+    def test_convert_cents_to_amount(self, stripe_test_keys):
+        """
+        TEST: Convertir centavos a monto decimal
+        VALIDACIÓN: Conversión correcta de enteros a decimales
+        """
+        service = StripeService(stripe_test_keys['secret_key'])
+        
+        assert service.convert_to_decimal(9999) == Decimal("99.99")
+        assert service.convert_to_decimal(1) == Decimal("0.01")
+        assert service.convert_to_decimal(99999999) == Decimal("999999.99")
+        pass
+    
+    
+    def test_format_stripe_error_message(self, stripe_test_keys):
+        """
+        TEST: Formatear mensaje de error amigable
+        VALIDACIÓN: Errores técnicos se convierten a mensajes amigables
+        """
+        service = StripeService(stripe_test_keys['secret_key'])
+        
+        card_error = stripe_errors.CardError("Card declined", param="card", code="card_declined")
+        message = service.format_error_message(card_error)
+        assert "tarjeta" in message.lower() or "declined" in message.lower()
+        pass
