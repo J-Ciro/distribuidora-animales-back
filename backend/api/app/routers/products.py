@@ -13,6 +13,7 @@ import base64
 import json
 import os
 from app.config import settings
+from app.services.ratings_service import RatingsService
 from app.utils.rabbitmq import publish_message_safe
 from app.utils.constants import (
     MIN_PRODUCT_NAME_LENGTH,
@@ -313,9 +314,30 @@ async def list_products(
             "fecha_creacion": r.fecha_creacion,
             "categoria": cats.get(r.categoria_id),
             "subcategoria": subcats.get(r.subcategoria_id),
-            "imagenes": images_map.get(r.id, [])
+            "imagenes": images_map.get(r.id, []),
+            "promedio_calificacion": 0.0,
+            "total_calificaciones": 0
         }
         products.append(prod)
+
+    # Attach rating stats in batch to avoid N+1 queries
+    try:
+        if prod_ids:
+            stats_map = RatingsService.get_products_with_ratings(db, prod_ids)
+            for p in products:
+                stats = stats_map.get(p['id'])
+                if stats:
+                    p['promedio_calificacion'] = stats.get('promedio_calificacion', 0.0)
+                    p['total_calificaciones'] = int(stats.get('total_calificaciones', 0))
+                else:
+                    p['promedio_calificacion'] = 0.0
+                    p['total_calificaciones'] = 0
+    except Exception:
+        # Non-fatal: set defaults if ratings fetch fails
+        logger.exception('Error fetching ratings stats for products')
+        for p in products:
+            p['promedio_calificacion'] = 0.0
+            p['total_calificaciones'] = 0
 
     return products
 
