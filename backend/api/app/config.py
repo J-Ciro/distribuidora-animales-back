@@ -56,9 +56,21 @@ class Settings(BaseSettings):
     
     # Email Configuration
     SMTP_SERVER: str = "smtp.gmail.com"
+    SMTP_HOST: str = "smtp.gmail.com"
     SMTP_PORT: int = 587
-    SMTP_USER: str = "your-email@gmail.com"
-    SMTP_PASSWORD: str = "your-app-password"
+    SMTP_USER: str = ""
+    SMTP_PASSWORD: str = ""
+    SMTP_PASS: str = ""
+    EMAIL_FROM_NAME: str = ""
+    EMAIL_FROM_ADDRESS: str = ""
+    
+    # Admin Configuration
+    ADMIN_EMAIL: str = ""
+    ADMIN_PASSWORD: str = ""
+    SEED_ADMIN_FORCE_ERROR: int = 0
+    
+    # Logging
+    BACKEND_LOG_FILE: str = "/var/log/backend/app.log"
     
     # File Upload
     UPLOAD_DIR: str = "./uploads"

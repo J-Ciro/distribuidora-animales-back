@@ -24,6 +24,9 @@ Backend API for Distribuidora Perros y Gatos e-commerce platform - a multi-vendo
 
 2. **Configure environment** (copy template):
    ```bash
+   # Project-level env for Docker Compose (do NOT commit real values)
+   cp .env.example .env
+
    cp backend/api/.env.example backend/api/.env
    # Edit if needed, but defaults work for local development
    ```
