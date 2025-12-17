@@ -7,8 +7,8 @@ from unittest.mock import patch, MagicMock
 from fastapi import HTTPException
 import stripe
 
-from app.services.stripe_service import stripe_service
-from app.config import settings
+from app.application.services.stripe_service import stripe_service
+from app.core.config import settings
 
 
 class TestStripeService:

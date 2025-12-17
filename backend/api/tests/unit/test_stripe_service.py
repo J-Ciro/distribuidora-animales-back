@@ -8,7 +8,7 @@ from fastapi import HTTPException
 import stripe
 from stripe import error as stripe_errors
 
-from app.services.stripe_service import stripe_service
+from app.application.services.stripe_service import stripe_service
 
 
 @pytest.mark.unit

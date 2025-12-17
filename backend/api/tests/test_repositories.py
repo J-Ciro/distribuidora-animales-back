@@ -6,12 +6,12 @@ from unittest.mock import Mock, MagicMock
 from datetime import datetime, timezone, timedelta
 from sqlalchemy.orm import Session
 
-from app.repositories.user_repository import (
+from app.infrastructure.repositories.user_repository import (
     SQLAlchemyUserRepository,
     SQLAlchemyVerificationCodeRepository,
     SQLAlchemyRefreshTokenRepository
 )
-from app.models import Usuario, VerificationCode, RefreshToken
+from app.domain.models import Usuario, VerificationCode, RefreshToken
 
 
 class TestSQLAlchemyUserRepository:

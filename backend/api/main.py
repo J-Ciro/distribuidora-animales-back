@@ -13,16 +13,16 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
 from fastapi.staticfiles import StaticFiles
 
-from app.config import settings
-from app.database import init_db, close_db, get_db
-from app.middleware.error_handler import setup_error_handlers
-from app.utils.rabbitmq import rabbitmq_producer
+from app.core.config import settings
+from app.core.database import init_db, close_db, get_db
+from app.presentation.middleware.error_handler import setup_error_handlers
+from app.infrastructure.external.rabbitmq import rabbitmq_producer
 
 # Configure logging
 log_level = logging.INFO if settings.DEBUG else logging.WARNING
 logging.basicConfig(level=log_level, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
-from app.routers import (
+from app.presentation.routers import (
     auth_router,
     categories_router,
     products_router,
@@ -35,8 +35,8 @@ from app.routers import (
     ratings_public_router,
     ratings_admin_router
 )
-from app.routers import public_orders
-from app.routers import addresses_router
+from app.presentation.routers import public_orders
+from app.presentation.routers import addresses_router
 
 # Optional file logging if BACKEND_LOG_FILE or APP_LOG_FILE is set
 _log_file = os.getenv("BACKEND_LOG_FILE") or os.getenv("APP_LOG_FILE")
@@ -51,18 +51,18 @@ if _log_file:
         logger.info(f"File logging enabled at {_log_file}")
     except Exception as e:
         logger.warning(f"Could not set up file logging: {e}")
-from app.routers.auth import router as auth_router
-from app.routers.categories import router as categories_router
-from app.routers.products import router as products_router
-from app.routers.inventory import router as inventory_router
-from app.routers.carousel import router as carousel_router
-from app.routers.orders import router as orders_router
-from app.routers.public_orders import router as orders_public_router
-from app.routers.admin_users import router as admin_users_router
-from app.routers.home_products import router as home_products_router
-from app.routers.ratings import public_router as ratings_public_router, admin_router as ratings_admin_router
-from app.routers.payments import router as payments_router
-from app.routers.webhooks import router as webhooks_router
+from app.presentation.routers.auth import router as auth_router
+from app.presentation.routers.categories import router as categories_router
+from app.presentation.routers.products import router as products_router
+from app.presentation.routers.inventory import router as inventory_router
+from app.presentation.routers.carousel import router as carousel_router
+from app.presentation.routers.orders import router as orders_router
+from app.presentation.routers.public_orders import router as orders_public_router
+from app.presentation.routers.admin_users import router as admin_users_router
+from app.presentation.routers.home_products import router as home_products_router
+from app.presentation.routers.ratings import public_router as ratings_public_router, admin_router as ratings_admin_router
+from app.presentation.routers.payments import router as payments_router
+from app.presentation.routers.webhooks import router as webhooks_router
 
 
 @asynccontextmanager
@@ -76,7 +76,7 @@ async def lifespan(app: FastAPI):
     
     # Inicializar schema de base de datos si es necesario
     try:
-        from app.utils.db_init import initialize_database
+        from app.shared.utils.db_init import initialize_database
         print("Inicializando base de datos...")
         initialize_database()
     except Exception as e:
@@ -171,7 +171,7 @@ def health():
 
 # Minimal admin read-only endpoints for tests
 from sqlalchemy.orm import Session
-from app.models import Usuario
+from app.domain.models import Usuario
 
 admin_router = APIRouter(prefix="/api/admin", tags=["admin-utils"])
 
@@ -218,7 +218,7 @@ app.include_router(webhooks_router, tags=["webhooks"])
 app.include_router(admin_router)
 
 # Public routers (frontend)
-from app.routers.carousel import public_router as carousel_public_router
+from app.presentation.routers.carousel import public_router as carousel_public_router
 app.include_router(carousel_public_router)
 
 

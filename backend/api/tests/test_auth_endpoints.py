@@ -15,9 +15,9 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from main import app
-from app.database import Base, get_db
-from app.models import Usuario
-from app.utils.security import SecurityUtils
+from app.core.database import Base, get_db
+from app.domain.models import Usuario
+from app.infrastructure.security.security import SecurityUtils
 
 
 # Base de datos SQLite en memoria para tests
