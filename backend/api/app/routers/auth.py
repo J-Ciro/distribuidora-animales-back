@@ -21,7 +21,9 @@ from app.schemas import (
     StandardResponse,
     LoginSuccessResponse,
     CartMergeInfo,
-    UsuarioPublicResponse
+    UsuarioPublicResponse,
+    ForgotPasswordRequest,
+    ResetPasswordRequest
 )
 from app.database import get_db
 from app.models import Usuario, VerificationCode, RefreshToken
@@ -631,6 +633,155 @@ def require_admin(current_user: UsuarioPublicResponse = Depends(get_current_user
 @router.get("/me", response_model=UsuarioPublicResponse)
 async def get_me(current_user: UsuarioPublicResponse = Depends(get_current_user)):
     return current_user
+
+
+@router.post("/forgot-password", response_model=StandardResponse, status_code=status.HTTP_200_OK)
+async def forgot_password(request: ForgotPasswordRequest, db: Session = Depends(get_db)):
+    """
+    Password recovery endpoint (US-ERROR-02 CP-21 to CP-22)
+    
+    Security requirements:
+    - Returns uniform message regardless of email existence (prevents user enumeration)
+    - Generates JWT token valid for 30 minutes
+    - Sends password recovery email with reset link
+    - Non-blocking: Always returns 200 OK with success message
+    """
+    try:
+        # 1. Validate required fields
+        if not request.email:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail={"status": "error", "message": "Por favor, completa todos los campos obligatorios."}
+            )
+        
+        # 2. Find usuario by email (case-insensitive)
+        usuario = db.query(Usuario).filter(func.lower(Usuario.email) == func.lower(request.email)).first()
+        
+        # 3. Publish recovery email ONLY if user exists (async, non-blocking)
+        if usuario:
+            try:
+                # Generate password reset token (30 min expiry)
+                reset_token = security_utils.create_password_reset_token({"user_id": usuario.id, "email": usuario.email})
+                
+                # Build reset link
+                frontend_url = settings.FRONTEND_URL or "http://localhost:3000"
+                reset_link = f"{frontend_url}/reset-password?token={reset_token}"
+                
+                # Publish email message to RabbitMQ
+                message = {
+                    "requestId": str(uuid.uuid4()),
+                    "to": usuario.email,
+                    "reset_link": reset_link,
+                    "action": "send_password_reset",
+                    "timestamp": datetime.now(timezone.utc).isoformat()
+                }
+                
+                # Attempt to publish but don't fail the request if it fails
+                try:
+                    rabbitmq_producer.publish("email.password_reset", message)
+                    logger.info(f"Password reset email queued for {usuario.email}")
+                except Exception as e:
+                    logger.error(f"⚠️  Error publishing password reset email to RabbitMQ: {str(e)}")
+                    logger.warning(f"Email will not be sent. Ensure RabbitMQ is running at {settings.RABBITMQ_HOST}:{settings.RABBITMQ_PORT}")
+                    # Don't fail - the endpoint should still return success for security (prevents user enumeration)
+            except Exception as e:
+                logger.error(f"Error generating reset token: {str(e)}", exc_info=True)
+                # Still return success to prevent email enumeration
+        
+        # 4. Return uniform message (CP-21 and CP-22)
+        # This prevents attackers from enumerating valid emails
+        return {
+            "status": "success",
+            "message": "Se ha enviado a tu correo el enlace de recuperación"
+        }
+    
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error during password recovery: {str(e)}", exc_info=True)
+        # Return success anyway to prevent email enumeration attacks
+        return {
+            "status": "success",
+            "message": "Se ha enviado a tu correo el enlace de recuperación"
+        }
+
+
+@router.post("/reset-password", response_model=StandardResponse, status_code=status.HTTP_200_OK)
+async def reset_password(request: ResetPasswordRequest, db: Session = Depends(get_db)):
+    """
+    Password reset endpoint (US-ERROR-02 CP-24 to CP-27)
+    
+    Security requirements:
+    - Validates JWT token (30 min expiry)
+    - Prevents token reuse (CP-27)
+    - Updates password and invalidates all existing tokens
+    """
+    try:
+        # 1. Verify and decode password reset token
+        try:
+            payload = security_utils.verify_password_reset_token(request.token)
+        except Exception as e:
+            logger.warning(f"Invalid password reset token: {str(e)}")
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail={"status": "error", "message": "Enlace de recuperación caducado o inválido. Solicita uno nuevo."}
+            )
+        
+        user_id = payload.get("user_id")
+        if not user_id:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail={"status": "error", "message": "Token inválido."}
+            )
+        
+        # 2. Find usuario
+        usuario = db.query(Usuario).filter(Usuario.id == user_id).first()
+        if not usuario:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail={"status": "error", "message": "Usuario no encontrado."}
+            )
+        
+        # 3. Hash new password
+        new_password_hash = security_utils.hash_password(request.new_password)
+        
+        # 4. Update password
+        usuario.password_hash = new_password_hash
+        usuario.updated_at = datetime.now(timezone.utc)
+        
+        # 5. Invalidate all refresh tokens for this user (force logout everywhere)
+        db.query(RefreshToken).filter(RefreshToken.usuario_id == user_id).update({"revoked": True})
+        
+        db.commit()
+        db.refresh(usuario)
+        
+        logger.info(f"Password reset successfully for user {usuario.id} ({usuario.email})")
+        
+        return {
+            "status": "success",
+            "message": "Contraseña actualizada exitosamente. Ya puedes iniciar sesión con tu nueva contraseña."
+        }
+    
+    except HTTPException:
+        db.rollback()
+        raise
+    except ValueError as e:
+        db.rollback()
+        error_msg = str(e)
+        if "contraseña" in error_msg.lower() or "password" in error_msg.lower():
+            error_msg = "La contraseña debe tener al menos 10 caracteres, incluir una mayúscula, un número y un carácter especial."
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={"status": "error", "message": error_msg}
+        )
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Error during password reset: {str(e)}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail={"status": "error", "message": "Error interno del servidor. Por favor, intenta más tarde."}
+        )
+
 
 
 @router.get("/dev/verification-code/{email}", status_code=status.HTTP_200_OK)
