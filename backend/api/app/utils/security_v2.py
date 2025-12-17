@@ -208,6 +208,17 @@ class SecurityUtils:
     @staticmethod
     def verify_verification_code(plain_code: str, hashed_code: str) -> bool:
         return VerificationCodeGenerator.verify(plain_code, hashed_code)
+    
+    @staticmethod
+    def create_password_reset_token(data: dict) -> str:
+        """Create password reset token with 30 min expiry"""
+        expires_delta = timedelta(minutes=30)
+        return JWTManager.create_access_token(data, expires_delta)
+    
+    @staticmethod
+    def verify_password_reset_token(token: str) -> dict:
+        """Verify and decode password reset token"""
+        return JWTManager.verify_token(token)
 
 
 # Create singleton instances for convenience

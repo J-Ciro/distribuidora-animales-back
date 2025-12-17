@@ -73,6 +73,30 @@ class StandardResponse(BaseModel):
     message: str
 
 
+class ForgotPasswordRequest(BaseModel):
+    """Request schema for password recovery (US-ERROR-02)"""
+    email: EmailStr
+
+
+class ResetPasswordRequest(BaseModel):
+    """Request schema for password reset with token (US-ERROR-02)"""
+    token: str
+    new_password: str = Field(..., min_length=10)
+    
+    @field_validator('new_password')
+    def password_strength(cls, v):
+        """Validate password according to HU specifications"""
+        if len(v) < 10:
+            raise ValueError('La contraseña debe tener al menos 10 caracteres, incluir una mayúscula, un número y un carácter especial.')
+        if not any(c.isupper() for c in v):
+            raise ValueError('La contraseña debe tener al menos 10 caracteres, incluir una mayúscula, un número y un carácter especial.')
+        if not any(c.isdigit() for c in v):
+            raise ValueError('La contraseña debe tener al menos 10 caracteres, incluir una mayúscula, un número y un carácter especial.')
+        if not any(c in '!@#$%^&*()_+-=[]{}|;:,.<>?' for c in v):
+            raise ValueError('La contraseña debe tener al menos 10 caracteres, incluir una mayúscula, un número y un carácter especial.')
+        return v
+
+
 # Category Schemas (HU_MANAGE_CATEGORIES)
 class CategoriaCreateRequest(BaseModel):
     """Request schema for creating a category - EXACT as per HU specification"""

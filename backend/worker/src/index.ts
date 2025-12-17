@@ -2,6 +2,7 @@
 import 'reflect-metadata';
 import { connect } from 'amqplib';
 import { consumeEmailMessages } from './consumers/email.consumer';
+import { consumePasswordResetMessages } from './consumers/password-reset.consumer';
 import { config } from './config';
 import { consumeInventoryMessages } from './consumers/inventory.consumer';
 import { consumeOrderMessages } from './consumers/order.consumer';
@@ -51,6 +52,7 @@ async function startWorker() {
     process.on('SIGINT', shutdown);
     process.on('SIGTERM', shutdown);
     consumeEmailMessages(channel);
+    consumePasswordResetMessages(channel);
     consumeOrderMessages(channel);
     consumeInventoryMessages(channel);
     consumeUserRegistrationMessages(channel);

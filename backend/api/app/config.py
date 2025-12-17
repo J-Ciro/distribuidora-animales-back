@@ -15,6 +15,9 @@ class Settings(BaseSettings):
     DEBUG: bool = False
     API_VERSION: str = "1.0.0"
     
+    # Frontend URL (for password reset links, email templates, etc)
+    FRONTEND_URL: str = "http://localhost:3000"
+    
     # Database (SQL Server)
     DB_SERVER: str = "localhost"
     DB_PORT: int = 1433
