@@ -22,6 +22,21 @@ from app.utils.rabbitmq import rabbitmq_producer
 log_level = logging.INFO if settings.DEBUG else logging.WARNING
 logging.basicConfig(level=log_level, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
+from app.routers import (
+    auth_router,
+    categories_router,
+    products_router,
+    inventory_router,
+    carousel_router,
+    orders_router,
+    orders_public_router,
+    admin_users_router,
+    home_products_router,
+    ratings_public_router,
+    ratings_admin_router
+)
+from app.routers import public_orders
+from app.routers import addresses_router
 
 # Optional file logging if BACKEND_LOG_FILE or APP_LOG_FILE is set
 _log_file = os.getenv("BACKEND_LOG_FILE") or os.getenv("APP_LOG_FILE")
@@ -195,6 +210,7 @@ app.include_router(admin_users_router, tags=["admin-users"])
 app.include_router(home_products_router, tags=["home-products"])
 app.include_router(ratings_public_router, tags=["ratings"])
 app.include_router(ratings_admin_router, tags=["admin-ratings"])
+app.include_router(addresses_router, tags=["user-addresses"])
 app.include_router(payments_router, tags=["payments"])
 app.include_router(webhooks_router, tags=["webhooks"])
 

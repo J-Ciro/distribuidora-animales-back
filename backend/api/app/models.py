@@ -154,6 +154,26 @@ class PedidosHistorialEstado(Base):
     fecha = Column(DateTime(timezone=True), server_default=func.now())
 
 
+# Address model (DireccionesUsuario) - using existing table
+class Direccion(Base):
+    __tablename__ = 'DireccionesUsuario'
+
+    id = Column(Integer, primary_key=True, index=True, autoincrement=True)
+    usuario_id = Column(Integer, ForeignKey('usuarios.id', ondelete='CASCADE'), nullable=False, index=True)
+    direccion_completa = Column(String(500), nullable=False)
+    municipio = Column(String(100), nullable=True)
+    departamento = Column(String(100), nullable=True)
+    pais = Column(String(100), nullable=True, default='Colombia')
+    es_principal = Column(Boolean, nullable=False, default=False)
+    alias = Column(String(100), nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+    # Optional relationship back to Usuario
+    # Not strictly required for this HU, but keeps ORM consistent
+    # usuario = relationship('Usuario', backref='direcciones')
+
+
 # Ratings models
 class Calificacion(Base):
     """
