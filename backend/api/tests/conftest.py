@@ -16,11 +16,11 @@ from fastapi.testclient import TestClient
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
 from main import app
-from app.database import Base, get_db
-from app.config import settings
-from app.models import Usuario, Pedido, PedidoItem, TransaccionPago
-from app.utils.security import SecurityUtils
-import app.models as models
+from app.core.database import Base, get_db
+from app.core.config import settings
+from app.domain.models import Usuario, Pedido, PedidoItem, TransaccionPago
+from app.infrastructure.security.security import SecurityUtils
+import app.domain.models as models
 
 
 # ============================================================================

@@ -4,9 +4,9 @@ Tests para SecurityUtils: password hashing, JWT, verification codes
 """
 import pytest
 from datetime import datetime, timedelta, timezone
-from app.utils.security import SecurityUtils
+from app.infrastructure.security.security import SecurityUtils
 from jose import jwt
-from app.config import settings
+from app.core.config import settings
 
 
 class TestPasswordHashing:

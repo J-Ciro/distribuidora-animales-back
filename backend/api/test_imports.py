@@ -10,7 +10,7 @@ print("Testing imports...")
 print("-" * 50)
 
 try:
-    from app.config import settings
+    from app.core.config import settings
     print("[OK] Config loaded")
     print(f"  API Host: {settings.API_HOST}")
     print(f"  API Port: {settings.API_PORT}")
@@ -20,35 +20,35 @@ except Exception as e:
     sys.exit(1)
 
 try:
-    from app.utils.constants import MIN_PRODUCT_NAME_LENGTH, MIN_PRODUCT_DESCRIPTION_LENGTH
+    from app.core.constants import MIN_PRODUCT_NAME_LENGTH, MIN_PRODUCT_DESCRIPTION_LENGTH
     print(f"[OK] Constants loaded: MIN_NAME={MIN_PRODUCT_NAME_LENGTH}, MIN_DESC={MIN_PRODUCT_DESCRIPTION_LENGTH}")
 except Exception as e:
     print(f"[ERROR] Constants failed: {e}")
     sys.exit(1)
 
 try:
-    from app.utils.rabbitmq import publish_message_safe, rabbitmq_producer
+    from app.infrastructure.external.rabbitmq import publish_message_safe, rabbitmq_producer
     print(f"[OK] RabbitMQ utilities loaded: {type(rabbitmq_producer).__name__}")
 except Exception as e:
     print(f"[ERROR] RabbitMQ failed: {e}")
     sys.exit(1)
 
 try:
-    from app.models import Usuario
+    from app.domain.models import Usuario
     print(f"[OK] Models loaded: {Usuario.__tablename__}")
 except Exception as e:
     print(f"[ERROR] Models failed: {e}")
     sys.exit(1)
 
 try:
-    from app.routers import auth_router, products_router
+    from app.presentation.routers import auth_router, products_router
     print("[OK] Routers loaded")
 except Exception as e:
     print(f"[ERROR] Routers failed: {e}")
     sys.exit(1)
 
 try:
-    from app.database import get_db, init_db
+    from app.core.database import get_db, init_db
     print("[OK] Database utilities loaded")
 except Exception as e:
     print(f"[ERROR] Database failed: {e}")

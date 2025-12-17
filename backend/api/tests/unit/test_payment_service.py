@@ -9,8 +9,8 @@ from datetime import datetime
 from fastapi import HTTPException
 from sqlalchemy.orm import Session
 
-from app.services.payment_service import PaymentService
-from app.models import TransaccionPago, Pedido, PedidoItem, EstadoPagoHistorial
+from app.application.services.payment_service import PaymentService
+from app.domain.models import TransaccionPago, Pedido, PedidoItem, EstadoPagoHistorial
 
 
 @pytest.mark.unit
