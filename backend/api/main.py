@@ -37,6 +37,7 @@ from app.routers import (
     ratings_admin_router
 )
 from app.routers import public_orders
+from app.routers import addresses_router
 
 
 @asynccontextmanager
@@ -156,6 +157,7 @@ app.include_router(admin_users_router, tags=["admin-users"])
 app.include_router(home_products_router, tags=["home-products"])
 app.include_router(ratings_public_router, tags=["ratings"])
 app.include_router(ratings_admin_router, tags=["admin-ratings"])
+app.include_router(addresses_router, tags=["user-addresses"])
 
 # Public routers (frontend)
 from app.routers.carousel import public_router as carousel_public_router

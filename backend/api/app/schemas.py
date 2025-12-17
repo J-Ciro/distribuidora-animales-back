@@ -461,3 +461,26 @@ class CalificacionesListResponse(BaseModel):
     data: List[CalificacionResponse] = []
     meta: Optional[MetaPage] = None
 
+
+# Address Schemas
+class DireccionCreate(BaseModel):
+    direccion_completa: str = Field(..., min_length=10, max_length=500)
+    municipio: Optional[str] = Field(None, max_length=100)
+    departamento: Optional[str] = Field(None, max_length=100)
+    pais: Optional[str] = Field('Colombia', max_length=100)
+    es_principal: Optional[bool] = False
+
+
+class DireccionResponse(BaseModel):
+    id: int
+    direccion_completa: str
+    municipio: Optional[str] = None
+    departamento: Optional[str] = None
+    pais: Optional[str] = 'Colombia'
+    es_principal: bool = False
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
+
+    class Config:
+        from_attributes = True
+

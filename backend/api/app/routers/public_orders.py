@@ -56,12 +56,37 @@ async def create_user_order(
                 detail={"status": "error", "message": "El carrito está vacío."}
             )
         
+        # Address: allow either raw address string or a saved address id
         direccion_entrega = payload.get("direccionEnvio") or payload.get("direccion_entrega")
-        if not direccion_entrega or len(direccion_entrega.strip()) < 10:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail={"status": "error", "message": "La dirección de envío debe tener al menos 10 caracteres."}
+        direccion_id = payload.get("direccion_id") or payload.get("direccionId")
+        if direccion_id and not direccion_entrega:
+            # Fetch address by id for current user
+            direccion = (
+                db.query(models.Direccion)
+                .filter(models.Direccion.id == int(direccion_id), models.Direccion.usuario_id == current_user.id)
+                .first()
             )
+            if not direccion:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail={"status": "error", "message": "La dirección seleccionada no existe.", "code": "ADDRESS_NOT_FOUND"}
+                )
+            direccion_entrega = direccion.direccion_completa
+
+        # If still no address string, enforce address requirement
+        if not direccion_entrega or len(str(direccion_entrega).strip()) < 10:
+            # If user has zero saved addresses, inform the client to open modal
+            has_addresses = db.query(models.Direccion).filter(models.Direccion.usuario_id == current_user.id).count() > 0
+            if not has_addresses:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail={"status": "error", "message": "Debes agregar al menos una dirección de entrega antes de realizar un pedido.", "code": "NO_ADDRESS"}
+                )
+            else:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail={"status": "error", "message": "Selecciona una dirección de entrega válida.", "code": "INVALID_ADDRESS"}
+                )
         
         # Get user's phone if not provided
         usuario = db.query(models.Usuario).filter(models.Usuario.id == current_user.id).first()

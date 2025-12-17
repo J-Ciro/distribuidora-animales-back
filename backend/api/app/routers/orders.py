@@ -381,83 +381,106 @@ public_router = APIRouter(
 )
 
 @public_router.post("/", response_model=PedidoResponse, status_code=status.HTTP_201_CREATED)
-async def create_customer_order(payload: PedidoCreate, db: Session = Depends(get_db)):
+async def create_customer_order(
+    payload: dict,
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user)
+):
     """
-    Create a new order (public endpoint for customers)
+    Create order for authenticated user with flexible payload keys.
+    Supports address by id (`direccion_id`) or raw string (`direccionEnvio`/`direccion_entrega`),
+    and product items with multiple key formats.
     """
-    # Validate usuario exists
-    usuario = db.query(models.Usuario).filter(models.Usuario.id == payload.usuario_id).first()
-    if not usuario:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Usuario no existe")
+    try:
+        # Validate products
+        productos = payload.get("productos") or payload.get("items") or []
+        if not productos:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="El carrito está vacío.")
 
-    pedido = models.Pedido(
-        usuario_id=payload.usuario_id,
-        estado='Pendiente',
-        direccion_entrega=payload.direccion_entrega,
-        municipio=payload.municipio,
-        departamento=payload.departamento,
-        pais=payload.pais or 'Colombia',
-        telefono_contacto=payload.telefono_contacto,
-        metodo_pago=payload.metodo_pago or 'Efectivo',
-        nota_especial=payload.nota_especial,
-    )
-    db.add(pedido)
-    db.flush()
+        # Resolve address
+        direccion_entrega = payload.get("direccionEnvio") or payload.get("direccion_entrega")
+        direccion_id = payload.get("direccion_id") or payload.get("direccionId")
+        if direccion_id and not direccion_entrega:
+            direccion = (
+                db.query(models.Direccion)
+                .filter(models.Direccion.id == int(direccion_id), models.Direccion.usuario_id == current_user.id)
+                .first()
+            )
+            if not direccion:
+                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="La dirección seleccionada no existe.")
+            direccion_entrega = direccion.direccion_completa
+        if not direccion_entrega or len(str(direccion_entrega).strip()) < 10:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Selecciona una dirección de entrega válida.")
 
-    total = 0
-    items_payload = getattr(payload, 'items', []) or []
-    for it in items_payload:
-        producto_id = int(it.get('producto_id'))
-        cantidad = int(it.get('cantidad'))
-        precio = float(it.get('precio_unitario')) if it.get('precio_unitario') is not None else 0.0
-        
-        # Verificar y descontar stock del producto usando SQL directo
-        query_producto = text("""
-            SELECT id, nombre, cantidad_disponible 
-            FROM Productos 
-            WHERE id = :producto_id
-        """)
-        result = db.execute(query_producto, {"producto_id": producto_id})
-        producto = result.fetchone()
-        
-        if not producto:
-            db.rollback()
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST, 
-                detail=f"Producto con ID {producto_id} no encontrado"
-            )
-        
-        if producto.cantidad_disponible < cantidad:
-            db.rollback()
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Stock insuficiente para {producto.nombre}. Disponible: {producto.cantidad_disponible}, Solicitado: {cantidad}"
-            )
-        
-        # Descontar el stock
-        update_stock = text("""
-            UPDATE Productos 
-            SET cantidad_disponible = cantidad_disponible - :cantidad 
-            WHERE id = :producto_id
-        """)
-        db.execute(update_stock, {"cantidad": cantidad, "producto_id": producto_id})
-        
-        total += cantidad * precio
-        pi = models.PedidoItem(
-            pedido_id=pedido.id,
-            producto_id=producto_id,
-            cantidad=cantidad,
-            precio_unitario=precio,
+        # Resolve phone and payment
+        usuario = db.query(models.Usuario).filter(models.Usuario.id == current_user.id).first()
+        telefono_contacto = payload.get("telefonoContacto") or payload.get("telefono_contacto") or (usuario.telefono if usuario else None)
+        if not telefono_contacto:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Debes proporcionar un número de teléfono de contacto.")
+        metodo_pago = payload.get("metodoPago") or payload.get("metodo_pago") or "Efectivo"
+        nota_especial = payload.get("notaEspecial") or payload.get("nota_especial")
+
+        # Create pedido
+        pedido = models.Pedido(
+            usuario_id=current_user.id,
+            estado='Pendiente',
+            direccion_entrega=direccion_entrega,
+            telefono_contacto=str(telefono_contacto).replace("+", "").replace("-", "").replace(" ", ""),
+            metodo_pago=metodo_pago,
+            nota_especial=nota_especial,
         )
-        db.add(pi)
+        db.add(pedido)
+        db.flush()
 
-    pedido.total = total
-    db.add(pedido)
-    db.commit()
-    db.refresh(pedido)
+        # Items and total
+        total = 0.0
+        for it in productos:
+            producto_id = int(it.get("sku") or it.get("producto_id") or it.get("id"))
+            cantidad = int(it.get("cantidad") or it.get("quantity") or 1)
+            precio = float(it.get("precioUnitario") or it.get("precio_unitario") or it.get("precio") or 0.0)
 
-    logger.info(f"Order created: pedido_id={pedido.id}, usuario_id={payload.usuario_id}, total={total}")
-    return _pedido_to_response(db, pedido)
+            # Stock checks
+            query_producto = text("""
+                SELECT id, nombre, cantidad_disponible 
+                FROM Productos 
+                WHERE id = :producto_id
+            """)
+            result = db.execute(query_producto, {"producto_id": producto_id})
+            producto = result.fetchone()
+            if not producto:
+                db.rollback()
+                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"Producto con ID {producto_id} no encontrado")
+            if producto.cantidad_disponible < cantidad:
+                db.rollback()
+                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"Stock insuficiente para {producto.nombre}. Disponible: {producto.cantidad_disponible}, Solicitado: {cantidad}")
+
+            db.execute(text("""
+                UPDATE Productos 
+                SET cantidad_disponible = cantidad_disponible - :cantidad 
+                WHERE id = :producto_id
+            """), {"cantidad": cantidad, "producto_id": producto_id})
+
+            total += cantidad * precio
+            db.add(models.PedidoItem(
+                pedido_id=pedido.id,
+                producto_id=producto_id,
+                cantidad=cantidad,
+                precio_unitario=precio,
+            ))
+
+        pedido.total = total
+        db.add(pedido)
+        db.commit()
+        db.refresh(pedido)
+
+        logger.info(f"Order created: pedido_id={pedido.id}, usuario_id={current_user.id}, total={total}")
+        return _pedido_to_response(db, pedido)
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Error creating public order: {str(e)}")
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Error interno al procesar el pedido.")
 
 
 @public_router.get("/my-orders", response_model=List[PedidoResponse])
