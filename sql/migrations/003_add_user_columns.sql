@@ -1,0 +1,4 @@
+ALTER TABLE Usuarios ADD telefono NVARCHAR(20);
+ALTER TABLE Usuarios ADD direccion NVARCHAR(500);
+ALTER TABLE Usuarios ADD ciudad NVARCHAR(100);
+ALTER TABLE Usuarios ADD pais NVARCHAR(100);

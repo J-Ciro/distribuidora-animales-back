@@ -7,33 +7,62 @@ import logging
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Depends
+from fastapi.routing import APIRouter
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
 from fastapi.staticfiles import StaticFiles
 
-from app.config import settings
-from app.database import init_db, close_db
-from app.middleware.error_handler import setup_error_handlers
-from app.utils.rabbitmq import rabbitmq_producer
+from app.core.config import settings
+from app.core.database import init_db, close_db, get_db
+from app.presentation.middleware.error_handler import setup_error_handlers
+from app.infrastructure.external.rabbitmq import rabbitmq_producer
 
 # Configure logging
-logging.basicConfig(
-    level=logging.INFO if settings.DEBUG else logging.WARNING,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-)
+log_level = logging.INFO if settings.DEBUG else logging.WARNING
+logging.basicConfig(level=log_level, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
-from app.routers import (
+from app.presentation.routers import (
     auth_router,
     categories_router,
     products_router,
     inventory_router,
     carousel_router,
     orders_router,
+    orders_public_router,
     admin_users_router,
-    home_products_router
+    home_products_router,
+    ratings_public_router,
+    ratings_admin_router
 )
-from app.routers import public_orders
+from app.presentation.routers import public_orders
+from app.presentation.routers import addresses_router
+
+# Optional file logging if BACKEND_LOG_FILE or APP_LOG_FILE is set
+_log_file = os.getenv("BACKEND_LOG_FILE") or os.getenv("APP_LOG_FILE")
+if _log_file:
+    try:
+        os.makedirs(os.path.dirname(_log_file), exist_ok=True)
+        file_handler = logging.FileHandler(_log_file, encoding="utf-8")
+        file_handler.setLevel(log_level)
+        file_handler.setFormatter(logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s'))
+        root_logger = logging.getLogger()
+        root_logger.addHandler(file_handler)
+        logger.info(f"File logging enabled at {_log_file}")
+    except Exception as e:
+        logger.warning(f"Could not set up file logging: {e}")
+from app.presentation.routers.auth import router as auth_router
+from app.presentation.routers.categories import router as categories_router
+from app.presentation.routers.products import router as products_router
+from app.presentation.routers.inventory import router as inventory_router
+from app.presentation.routers.carousel import router as carousel_router
+from app.presentation.routers.orders import router as orders_router
+from app.presentation.routers.public_orders import router as orders_public_router
+from app.presentation.routers.admin_users import router as admin_users_router
+from app.presentation.routers.home_products import router as home_products_router
+from app.presentation.routers.ratings import public_router as ratings_public_router, admin_router as ratings_admin_router
+from app.presentation.routers.payments import router as payments_router
+from app.presentation.routers.webhooks import router as webhooks_router
 
 
 @asynccontextmanager
@@ -43,13 +72,24 @@ async def lifespan(app: FastAPI):
     Handles database initialization and cleanup
     """
     # Startup
-    logger.info("Starting Distribuidora Perros y Gatos Backend API")
+    print("Starting Distribuidora Perros y Gatos Backend API")
+    
+    # Inicializar schema de base de datos si es necesario
+    try:
+        from app.shared.utils.db_init import initialize_database
+        print("Inicializando base de datos...")
+        initialize_database()
+    except Exception as e:
+        print(f"Warning: Could not initialize database schema: {str(e)}")
+        print("The database may need manual initialization")
+    
+    # Inicializar conexión de SQLAlchemy
     try:
         init_db()
-        logger.info("Database initialized successfully")
+        print("Database connection pool initialized successfully")
     except Exception as e:
-        logger.warning(f"Could not initialize database: {str(e)}")
-        logger.warning("Application will continue without database connection")
+        print(f"Warning: Could not initialize database connection: {str(e)}")
+        print("Application will continue without database connection")
         # Don't raise - allow app to start for development
     
     yield
@@ -125,6 +165,34 @@ setup_error_handlers(app)
 
 
 # Health check endpoint
+@app.get("/health")
+def health():
+    return {"status": "ok"}
+
+# Minimal admin read-only endpoints for tests
+from sqlalchemy.orm import Session
+from app.domain.models import Usuario
+
+admin_router = APIRouter(prefix="/api/admin", tags=["admin-utils"])
+
+@admin_router.get("/exists")
+def admin_exists(email: str, db: Session = Depends(get_db)):
+    try:
+        exists = db.query(Usuario).filter(Usuario.email == email, Usuario.es_admin == True).first() is not None
+        return {"exists": bool(exists)}
+    except Exception as e:
+        logger.error(f"Error checking admin exists: {e}")
+        return {"exists": False}
+
+
+@admin_router.get("/count")
+def admin_count(db: Session = Depends(get_db)):
+    try:
+        count = db.query(Usuario).filter(Usuario.es_admin == True).count()
+        return {"count": int(count)}
+    except Exception as e:
+        logger.error(f"Error counting admins: {e}")
+        return {"count": 0}
 
 
 
@@ -137,13 +205,20 @@ app.include_router(products_router, tags=["products"])
 app.include_router(inventory_router, tags=["inventory"])
 app.include_router(carousel_router, tags=["carousel"])
 app.include_router(orders_router, tags=["orders"])
+app.include_router(orders_public_router, tags=["pedidos-public"])
 app.include_router(admin_users_router, tags=["admin-users"])
 app.include_router(home_products_router, tags=["home-products"])
-# Public orders router for authenticated users
-app.include_router(public_orders.router, tags=["public-orders"])
+app.include_router(ratings_public_router, tags=["ratings"])
+app.include_router(ratings_admin_router, tags=["admin-ratings"])
+app.include_router(addresses_router, tags=["user-addresses"])
+app.include_router(payments_router, tags=["payments"])
+app.include_router(webhooks_router, tags=["webhooks"])
 
-# Public carousel router (frontend)
-from app.routers.carousel import public_router as carousel_public_router
+# Test utilities router
+app.include_router(admin_router)
+
+# Public routers (frontend)
+from app.presentation.routers.carousel import public_router as carousel_public_router
 app.include_router(carousel_public_router)
 
 

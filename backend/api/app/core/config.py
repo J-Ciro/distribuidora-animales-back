@@ -1,0 +1,101 @@
+"""
+Configuration settings for FastAPI application
+Using Pydantic Settings for environment variable management
+"""
+from pydantic_settings import BaseSettings
+from typing import List
+
+
+class Settings(BaseSettings):
+    """Application settings loaded from environment variables"""
+    
+    # Server
+    API_HOST: str = "0.0.0.0"
+    API_PORT: int = 8000
+    DEBUG: bool = False
+    API_VERSION: str = "1.0.0"
+    
+    # Frontend URL (for password reset links, email templates, etc)
+    FRONTEND_URL: str = "http://localhost:3000"
+    
+    # Database (SQL Server)
+    DB_SERVER: str = "localhost"
+    DB_PORT: int = 1433
+    DB_NAME: str = "distribuidora_db"
+    DB_USER: str = "sa"
+    # SECURITY: DB_PASSWORD must be provided via environment variable - no default for security
+    DB_PASSWORD: str
+    
+    @property
+    def DATABASE_URL(self) -> str:
+        """Construct SQL Server connection string"""
+        return f"mssql+pyodbc://{self.DB_USER}:{self.DB_PASSWORD}@{self.DB_SERVER}:{self.DB_PORT}/{self.DB_NAME}?driver=ODBC+Driver+17+for+SQL+Server"
+    
+    # RabbitMQ
+    RABBITMQ_HOST: str = "localhost"
+    RABBITMQ_PORT: int = 5672
+    RABBITMQ_USER: str = "guest"
+    RABBITMQ_PASSWORD: str = "guest"
+    RABBITMQ_VHOST: str = "/"
+    
+    @property
+    def RABBITMQ_URL(self) -> str:
+        """Construct RabbitMQ connection URL"""
+        return f"amqp://{self.RABBITMQ_USER}:{self.RABBITMQ_PASSWORD}@{self.RABBITMQ_HOST}:{self.RABBITMQ_PORT}/{self.RABBITMQ_VHOST}"
+    
+    # Security & JWT
+    # SECURITY: SECRET_KEY must be provided via environment variable - no default for security
+    SECRET_KEY: str
+    ALGORITHM: str = "HS256"
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = 15
+    REFRESH_TOKEN_EXPIRE_DAYS: int = 7
+    
+    # CORS
+    CORS_ORIGINS: List[str] = ["http://localhost:3000", "http://localhost:8080", "http://localhost:5173"]
+    ALLOWED_HOSTS: List[str] = ["localhost", "127.0.0.1"]
+    
+    # Email Configuration
+    SMTP_SERVER: str = "smtp.gmail.com"
+    SMTP_HOST: str = "smtp.gmail.com"
+    SMTP_PORT: int = 587
+    SMTP_USER: str = ""
+    SMTP_PASSWORD: str = ""
+    SMTP_PASS: str = ""
+    EMAIL_FROM_NAME: str = ""
+    EMAIL_FROM_ADDRESS: str = ""
+    
+    # Admin Configuration
+    ADMIN_EMAIL: str = ""
+    ADMIN_PASSWORD: str = ""
+    SEED_ADMIN_FORCE_ERROR: int = 0
+    
+    # Logging
+    BACKEND_LOG_FILE: str = "/var/log/backend/app.log"
+    
+    # File Upload
+    UPLOAD_DIR: str = "./uploads"
+    MAX_FILE_SIZE: int = 10485760  # 10 MB
+    ALLOWED_IMAGE_EXTENSIONS: List[str] = [".jpg", ".jpeg", ".png", ".svg", ".webp"]
+    
+    # Rate Limiting
+    MAX_LOGIN_ATTEMPTS: int = 5
+    LOGIN_LOCKOUT_DURATION_MINUTES: int = 15
+    
+    # Email Verification
+    VERIFICATION_CODE_EXPIRE_MINUTES: int = 10
+    MAX_VERIFICATION_ATTEMPTS: int = 5
+    MAX_RESEND_CODE_ATTEMPTS: int = 3
+    RESEND_CODE_WINDOW_MINUTES: int = 60
+    
+    # Stripe Payment Gateway
+    STRIPE_SECRET_KEY: str = ""
+    STRIPE_PUBLISHABLE_KEY: str = ""
+    STRIPE_WEBHOOK_SECRET: str = ""
+    
+    class Config:
+        env_file = ".env"
+        case_sensitive = True
+
+
+# Instancia global de settings
+settings = Settings()

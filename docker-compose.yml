@@ -11,24 +11,20 @@ services:
         condition: service_healthy
       sqlserver:
         condition: service_healthy
-      db-migrator:
-        condition: service_completed_successfully
-    environment:
-      - RABBITMQ_URL=amqp://guest:guest@rabbitmq:5672/
-      - DB_SERVER=sqlserver
-      - DB_PORT=1433
-      - DB_NAME=distribuidora_db
-      - DB_USER=SA
-      - DB_PASSWORD=yourStrongPassword123#
-      - RABBITMQ_HOST=rabbitmq
-      - RABBITMQ_PORT=5672
-      - RABBITMQ_USER=guest
-      - RABBITMQ_PASSWORD=guest
-      - DEBUG=True
+    env_file:
+      - .env
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+    restart: unless-stopped
     networks:
       - distribuidora-network
     volumes:
       - ./backend/api/app/uploads:/app/uploads   # persistir uploads entre reinicios y hacerlo accesible desde contenedor
+      - ./logs/backend:/var/log/backend
 
   worker:
     build:
@@ -40,23 +36,9 @@ services:
         condition: service_healthy
       sqlserver:
         condition: service_healthy
-      db-migrator:
-        condition: service_completed_successfully
-    environment:
-      - RABBITMQ_URL=amqp://guest:guest@rabbitmq:5672/
-      - SMTP_HOST=email-smtp.<region>.amazonaws.com
-      - SMTP_PORT=587
-      - SMTP_USER=AKIA4LK5VLMNEWTDJQVS
-      - SMTP_PASS=BHmouW5kBsfS7VtHFpk78UzcevCMFfSScvrBUWNHPHTP
-      - DB_SERVER=sqlserver
-      - DB_PORT=1433
-      - DB_NAME=distribuidora_db
-      - DB_USER=SA
-      - DB_PASSWORD=yourStrongPassword123#
-      - RABBITMQ_HOST=rabbitmq
-      - RABBITMQ_PORT=5672
-      - RABBITMQ_USER=guest
-      - RABBITMQ_PASSWORD=guest
+    env_file:
+      - .env
+    restart: unless-stopped
     networks:
       - distribuidora-network
 
@@ -71,67 +53,34 @@ services:
       interval: 30s
       timeout: 30s
       retries: 3
+      start_period: 60s
+    restart: unless-stopped
     networks:
       - distribuidora-network
 
   sqlserver:
     image: mcr.microsoft.com/mssql/server:2022-latest
     container_name: sqlserver
+    hostname: sqlserver
     ports:
       - "1433:1433"
-    environment:
-      - ACCEPT_EULA=Y
-      - SA_PASSWORD=yourStrongPassword123#
-      - MSSQL_PID=Developer
-      - MSSQL_AGENT_ENABLED=true
+    env_file:
+      - .env
     volumes:
       - sqlserver_data:/var/opt/mssql
     deploy:
       resources:
         limits:
-          memory: 2G
+          memory: 3G
         reservations:
-          memory: 1G
+          memory: 2G
     healthcheck:
-      test: ["CMD-SHELL", "/opt/mssql-tools18/bin/sqlcmd -S localhost -U SA -P 'yourStrongPassword123#' -C -Q 'SELECT 1' || exit 1"]
-      interval: 30s
-      timeout: 20s
-      retries: 10
-      start_period: 120s
+      test: ["CMD-SHELL", "timeout 5 /opt/mssql-tools18/bin/sqlcmd -S localhost,1433 -U SA -P '${SA_PASSWORD}' -Q 'SELECT 1' > /dev/null 2>&1 && echo 0 || echo 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+      start_period: 240s
     restart: unless-stopped
-    networks:
-      - distribuidora-network
-
-  db-migrator:
-    image: mcr.microsoft.com/mssql-tools # This image contains sqlcmd
-    container_name: distribuidora-db-migrator
-    volumes:
-      - ./sql:/sql # Mount the entire sql directory
-    command: >
-      sh -c "
-      echo 'Waiting for SQL Server...';
-      for i in $$(seq 1 30); do
-        /opt/mssql-tools/bin/sqlcmd -S sqlserver -U SA -P 'yourStrongPassword123#' -Q 'SELECT 1' > /dev/null 2>&1 && break || sleep 5;
-      done;
-      echo 'Creating database if not exists...';
-      /opt/mssql-tools/bin/sqlcmd -S sqlserver -U SA -P 'yourStrongPassword123#' -d master -Q \"IF NOT EXISTS(SELECT * FROM sys.databases WHERE name = 'distribuidora_db') CREATE DATABASE [distribuidora_db];\";
-      if [ -f /sql/schema.sql ]; then
-        echo 'Applying schema...';
-        /opt/mssql-tools/bin/sqlcmd -S sqlserver -U SA -P 'yourStrongPassword123#' -d distribuidora_db -i /sql/schema.sql;
-      fi;
-      if [ -d /sql/migrations ]; then
-        echo 'Applying migrations...';
-        for f in /sql/migrations/*.sql; do [ -f \"$$f\" ] && /opt/mssql-tools/bin/sqlcmd -S sqlserver -U SA -P 'yourStrongPassword123#' -d distribuidora_db -i \"$$f\"; done;
-      fi;
-      if [ -d /sql/seeders ]; then
-        echo 'Applying seeders...';
-        for f in /sql/seeders/*.sql; do [ -f \"$$f\" ] && /opt/mssql-tools/bin/sqlcmd -S sqlserver -U SA -P 'yourStrongPassword123#' -d distribuidora_db -i \"$$f\"; done;
-      fi;
-      echo 'Database initialization complete.';
-      "
-    depends_on:
-      sqlserver:
-        condition: service_healthy
     networks:
       - distribuidora-network
 

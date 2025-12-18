@@ -1,0 +1,1 @@
+ALTER TABLE Pedidos ADD metodo_pago NVARCHAR(50) DEFAULT 'Efectivo';

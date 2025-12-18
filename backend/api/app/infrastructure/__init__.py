@@ -1,0 +1,4 @@
+"""
+Infrastructure module - Technical implementations
+"""
+

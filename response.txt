@@ -1,1 +1,0 @@
-{"status":"error","message":"Validation error","errors":[{"field":"body -> payload","message":"Input should be a valid dictionary","type":"dict_type"}]}
