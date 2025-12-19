@@ -1,0 +1,2 @@
+- name: SonarQube Scan Action
+  uses: chetanbothra/sonarqube-scan-action@v2
