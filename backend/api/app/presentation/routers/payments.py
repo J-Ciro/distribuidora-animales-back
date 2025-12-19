@@ -1,6 +1,7 @@
 """
 Payments Router: REST endpoints for payment processing with Stripe
 Handles creation of payment intents, confirmation, and status checks
+Refactored to follow SOLID principles with separated concerns
 """
 from fastapi import APIRouter, Depends, HTTPException, status, Body
 from sqlalchemy.orm import Session
@@ -20,6 +21,8 @@ from app.presentation.schemas import (
 )
 from app.application.services.stripe_service import stripe_service
 from app.application.services.payment_service import payment_service
+from app.application.validators.payment_validator import PaymentValidator
+from app.infrastructure.repositories.payment_repository import PaymentRepository
 import app.domain.models as models
 
 logger = logging.getLogger(__name__)
@@ -56,33 +59,18 @@ async def create_payment_intent(
     try:
         logger.info(f"Creating payment intent for order {request.pedido_id}, user {current_user.id}")
         
-        # Get the order
-        pedido = db.query(models.Pedido).filter(
-            models.Pedido.id == request.pedido_id
-        ).first()
+        # Initialize services
+        validator = PaymentValidator()
+        repository = PaymentRepository(db)
         
-        if not pedido:
-            logger.warning(f"Order not found: {request.pedido_id}")
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Pedido no encontrado"
-            )
+        # Validate request data
+        validator.validate_amount(request.amount)
+        validator.validate_currency(request.currency)
         
-        # Verify user owns the order
-        if pedido.usuario_id != current_user.id:
-            logger.warning(f"Unauthorized access to order {request.pedido_id}")
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Acceso denegado a este pedido"
-            )
-        
-        # Verify order status
-        if pedido.estado_pago != "Pendiente de Pago":
-            logger.warning(f"Order not in pending status: {request.pedido_id}")
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Pedido no está en estado de pago pendiente"
-            )
+        # Get and validate order
+        pedido = validator.validate_order_exists(db, request.pedido_id)
+        validator.validate_user_owns_order(pedido, current_user.id)
+        validator.validate_order_payment_pending(pedido)
         
         # Verify stock availability
         payment_service.verify_stock_availability(db, request.pedido_id)
@@ -163,25 +151,16 @@ async def confirm_payment(
     try:
         logger.info(f"Confirming payment for order {request.pedido_id}, user {current_user.id}")
         
-        # Get the transaction
-        transaccion = db.query(models.TransaccionPago).filter(
-            models.TransaccionPago.payment_intent_id == request.payment_intent_id
-        ).first()
+        # Initialize services
+        validator = PaymentValidator()
+        repository = PaymentRepository(db)
         
-        if not transaccion:
-            logger.warning(f"Transaction not found: {request.payment_intent_id}")
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Transacción no encontrada"
-            )
+        # Validate payment intent ID
+        validator.validate_payment_intent_id(request.payment_intent_id)
         
-        # Verify user owns the transaction
-        if transaccion.usuario_id != current_user.id:
-            logger.warning(f"Unauthorized transaction access")
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Acceso denegado"
-            )
+        # Get and validate transaction
+        transaccion = validator.validate_transaction_exists(db, request.payment_intent_id)
+        validator.validate_user_owns_transaction(transaccion, current_user.id)
         
         # Process the payment
         result = payment_service.process_payment(
@@ -233,16 +212,15 @@ async def get_payment_status(
     try:
         logger.info(f"Querying payment status: {payment_intent_id}")
         
-        # Verify user owns the transaction
-        transaccion = db.query(models.TransaccionPago).filter(
-            models.TransaccionPago.payment_intent_id == payment_intent_id
-        ).first()
+        # Initialize services
+        validator = PaymentValidator()
         
-        if not transaccion or transaccion.usuario_id != current_user.id:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Acceso denegado"
-            )
+        # Validate payment intent ID
+        validator.validate_payment_intent_id(payment_intent_id)
+        
+        # Get and validate transaction
+        transaccion = validator.validate_transaction_exists(db, payment_intent_id)
+        validator.validate_user_owns_transaction(transaccion, current_user.id)
         
         # Get status from Stripe
         status_info = stripe_service.get_payment_intent_status(payment_intent_id)
@@ -285,28 +263,16 @@ async def get_order_transactions(
     try:
         logger.info(f"Getting transactions for order {pedido_id}")
         
-        # Get the order
-        pedido = db.query(models.Pedido).filter(
-            models.Pedido.id == pedido_id
-        ).first()
+        # Initialize services
+        validator = PaymentValidator()
+        repository = PaymentRepository(db)
         
-        if not pedido:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Pedido no encontrado"
-            )
-        
-        # Verify access: owner or admin
-        if pedido.usuario_id != current_user.id and not getattr(current_user, 'es_admin', False):
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Acceso denegado"
-            )
+        # Get and validate order
+        pedido = validator.validate_order_exists(db, pedido_id)
+        validator.validate_user_can_access_order(pedido, current_user)
         
         # Get all transactions for the order
-        transacciones = db.query(models.TransaccionPago).filter(
-            models.TransaccionPago.pedido_id == pedido_id
-        ).order_by(models.TransaccionPago.fecha_creacion.desc()).all()
+        transacciones = repository.get_order_transactions(pedido_id)
         
         logger.info(f"Found {len(transacciones)} transactions for order {pedido_id}")
         
@@ -353,33 +319,17 @@ async def get_order_payment_status(
     try:
         logger.info(f"Getting payment status for order {pedido_id}, user {current_user.id}")
         
-        # Get the order
-        pedido = db.query(models.Pedido).filter(
-            models.Pedido.id == pedido_id
-        ).first()
+        # Initialize services
+        validator = PaymentValidator()
+        repository = PaymentRepository(db)
         
-        if not pedido:
-            logger.warning(f"Order not found: {pedido_id}")
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Pedido no encontrado"
-            )
+        # Get and validate order
+        pedido = validator.validate_order_exists(db, pedido_id)
+        validator.validate_user_can_access_order(pedido, current_user)
         
-        # Verify access: owner or admin
-        if pedido.usuario_id != current_user.id and not getattr(current_user, 'es_admin', False):
-            logger.warning(f"Unauthorized access to order {pedido_id}")
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Acceso denegado"
-            )
-        
-        # Get payment status
+        # Get payment status and transactions
         estado_pago = pedido.estado_pago if hasattr(pedido, 'estado_pago') else "No disponible"
-        
-        # Get all transactions for the order
-        transacciones = db.query(models.TransaccionPago).filter(
-            models.TransaccionPago.pedido_id == pedido_id
-        ).order_by(models.TransaccionPago.fecha_creacion.desc()).all()
+        transacciones = repository.get_order_transactions(pedido_id)
         
         # Map transaction status to descriptive message
         mensajes = {
