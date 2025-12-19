@@ -15,17 +15,17 @@ class Usuario(Base):
     """
     __tablename__ = "usuarios"
     
-    id = Column(Integer, primary_key=True, index=True, autoincrement=True)
-    nombre_completo = Column(String(200), nullable=False)
-    email = Column(String(255), unique=True, nullable=False, index=True)
-    cedula = Column(String(50), nullable=False)
-    password_hash = Column(String(255), nullable=False)
-    es_admin = Column(Boolean, default=False, nullable=False)
-    is_active = Column(Boolean, default=False, nullable=False)
-    fecha_registro = Column(DateTime, server_default=func.getdate(), nullable=True)
-    ultimo_login = Column(DateTime, nullable=True)
-    created_at = Column(DateTime, nullable=True)
-    updated_at = Column(DateTime, nullable=True)
+    # id = Column(Integer, primary_key=True, index=True, autoincrement=True)
+    # nombre_completo = Column(String(200), nullable=False)
+    # email = Column(String(255), unique=True, nullable=False, index=True)
+    # cedula = Column(String(50), nullable=False)
+    # password_hash = Column(String(255), nullable=False)
+    # es_admin = Column(Boolean, default=False, nullable=False)
+    # is_active = Column(Boolean, default=False, nullable=False)
+    # fecha_registro = Column(DateTime, server_default=func.getdate(), nullable=True)
+    # ultimo_login = Column(DateTime, nullable=True)
+    # created_at = Column(DateTime, nullable=True)
+    # updated_at = Column(DateTime, nullable=True)
 
     # Additional fields
     telefono = Column(String(20), nullable=True)
