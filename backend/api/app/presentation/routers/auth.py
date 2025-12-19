@@ -1,17 +1,18 @@
 """
 Authentication router: Register, Login, Logout, Token refresh
 Handles HU_REGISTER_USER and HU_LOGIN_USER
+
+Refactored following SOLID principles:
+- Thin controller layer - only handles HTTP concerns
+- Delegates business logic to AuthService
+- Uses custom exceptions for better error handling
+- Follows Dependency Inversion Principle
 """
 from fastapi import APIRouter, Depends, HTTPException, status, Response, Request
 from sqlalchemy.orm import Session
-from sqlalchemy import func, and_, or_
-from sqlalchemy.exc import IntegrityError
-from datetime import datetime, timedelta, timezone
 from typing import Optional
-import uuid
 import logging
 
-import hashlib
 from app.presentation.schemas import (
     RegisterRequest, 
     LoginRequest, 
@@ -26,39 +27,75 @@ from app.presentation.schemas import (
     ResetPasswordRequest
 )
 from app.core.database import get_db
-from app.domain.models import Usuario, VerificationCode, RefreshToken
-from app.infrastructure.security.security import security_utils
+from app.domain.models import Usuario
+from app.application.services.auth_service import AuthService
+from app.infrastructure.repositories.user_repository import (
+    SQLAlchemyUserRepository,
+    SQLAlchemyVerificationCodeRepository,
+    SQLAlchemyRefreshTokenRepository
+)
+from app.domain.interfaces.message_broker import MessageBroker
 from app.infrastructure.external.rabbitmq import rabbitmq_producer
-from app.infrastructure.external.email_service import email_service
+from app.infrastructure.security.security import security_utils
+from app.domain.exceptions import AuthenticationError
 from app.core.config import settings
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(
-    tags=["auth"]
-)
+router = APIRouter(tags=["auth"])
 
 
-def _check_email_exists(db: Session, email: str, exclude_user_id: Optional[int] = None) -> bool:
-    """Check if email exists (case-insensitive)"""
-    query = db.query(Usuario).filter(func.lower(Usuario.email) == func.lower(email))
-    if exclude_user_id:
-        query = query.filter(Usuario.id != exclude_user_id)
-    return query.first() is not None
+# Dependency Injection helpers
+def get_auth_service(db: Session = Depends(get_db)) -> AuthService:
+    """Factory function for AuthService - Dependency Injection"""
+    user_repo = SQLAlchemyUserRepository(db)
+    verification_repo = SQLAlchemyVerificationCodeRepository(db)
+    token_repo = SQLAlchemyRefreshTokenRepository(db)
+    message_broker = rabbitmq_producer  # Using existing RabbitMQ producer as MessageBroker
+    
+    return AuthService(
+        db=db,
+        user_repo=user_repo,
+        verification_repo=verification_repo,
+        token_repo=token_repo,
+        message_broker=message_broker
+    )
 
 
-def _check_cedula_exists(db: Session, cedula: str, exclude_user_id: Optional[int] = None) -> bool:
-    """Check if cedula exists in usuarios table"""
-    if not cedula:
-        return False
-    query = db.query(Usuario).filter(Usuario.cedula == cedula)
-    if exclude_user_id:
-        query = query.filter(Usuario.id != exclude_user_id)
-    return query.first() is not None
+def handle_auth_error(e: Exception) -> HTTPException:
+    """
+    Centralized error handler for authentication errors
+    Converts domain exceptions to HTTP exceptions
+    """
+    if isinstance(e, AuthenticationError):
+        return HTTPException(
+            status_code=e.status_code,
+            detail={"status": "error", "message": e.message}
+        )
+    elif isinstance(e, ValueError):
+        # Handle password validation errors
+        error_msg = str(e)
+        if "contraseña" in error_msg.lower() or "password" in error_msg.lower():
+            error_msg = "La contraseña debe tener al menos 10 caracteres, incluir una mayúscula, un número y un carácter especial."
+        return HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={"status": "error", "message": error_msg}
+        )
+    else:
+        logger.error(f"Unexpected error: {str(e)}", exc_info=True)
+        return HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail={"status": "error", "message": "Error interno del servidor. Por favor, intenta más tarde."}
+        )
 
+
+# ==================== ENDPOINTS ====================
 
 @router.post("/register", response_model=StandardResponse, status_code=status.HTTP_201_CREATED)
-async def register(request: RegisterRequest, db: Session = Depends(get_db)):
+async def register(
+    request: RegisterRequest,
+    auth_service: AuthService = Depends(get_auth_service)
+):
     """
     Register new user with email verification
     
@@ -66,137 +103,19 @@ async def register(request: RegisterRequest, db: Session = Depends(get_db)):
     - Email must be unique and verified via 6-digit code
     - Password: 10+ chars, uppercase, digit, special char
     - Sends verification email with 6-digit code (10 min expiry)
-    - Publishes to email.verification queue
     """
     try:
-        # 1. Validate required fields - Pydantic handles validation, but check for empty
-        if not request.email or not request.password or not request.nombre:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail={"status": "error", "message": "Por favor, completa todos los campos obligatorios."}
-            )
-        
-        # 2. Check email uniqueness (case-insensitive)
-        if _check_email_exists(db, request.email):
-            raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT,
-                detail={"status": "error", "message": "El correo ya está registrado. ¿Deseas iniciar sesión o recuperar tu contraseña?"}
-            )
-
-        # 2b. Check cedula uniqueness (if provided)
-        if request.cedula and _check_cedula_exists(db, request.cedula):
-            raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT,
-                detail={"status": "error", "message": "La cédula ya está registrada."}
-            )
-        
-        # 3. Password validation is handled by Pydantic field_validator
-        # It will raise ValueError with the exact message if invalid
-        
-        # 4. Hash password using bcrypt
-        password_hash = security_utils.hash_password(request.password)
-        
-        # 5. Create usuario entry (is_active=False) - Requiere verificación de email
-        nuevo_usuario = Usuario(
-            email=request.email,
-            password_hash=password_hash,
-            nombre_completo=request.nombre,  # Map 'nombre' from request to 'nombre_completo' in DB
-            cedula=request.cedula,
-            telefono=request.telefono,
-            direccion_envio=request.direccion_envio,
-            preferencia_mascotas=request.preferencia_mascotas,
-            is_active=False  # Usuario inactivo hasta verificar email
-        )
-        db.add(nuevo_usuario)
-        try:
-            db.flush()  # Get the ID without committing
-        except IntegrityError as ie:
-            db.rollback()
-            # Handle unique constraint violations that slipped past pre-checks
-            msg = str(ie.orig) if hasattr(ie, 'orig') else str(ie)
-            # If cedula duplicate key reported, return cedula message
-            if 'duplicate' in msg.lower() or 'violation' in msg.lower() or 'unique' in msg.lower():
-                # Generic message to avoid leaking DB constraint names
-                raise HTTPException(
-                    status_code=status.HTTP_409_CONFLICT,
-                    detail={"status": "error", "message": "El correo o la cédula ya están registrados."}
-                )
-            raise
-        
-        # 6. Generate verification code (6 digits)
-        verification_code = security_utils.generate_verification_code()
-        code_hash = security_utils.hash_verification_code(verification_code)
-        
-        # 7. Create VerificationCode with expires_at = now + 10 minutes
-        expires_at = datetime.now(timezone.utc) + timedelta(minutes=settings.VERIFICATION_CODE_EXPIRE_MINUTES)
-        
-        # Invalidar códigos anteriores no usados
-        db.query(VerificationCode).filter(
-            and_(
-                VerificationCode.usuario_id == nuevo_usuario.id,
-                VerificationCode.is_used == False
-            )
-        ).update({"is_used": True})
-        
-        # Create new verification code
-        verification_record = VerificationCode(
-            usuario_id=nuevo_usuario.id,
-            code_hash=code_hash,
-            expires_at=expires_at,
-            sent_count=1,
-            attempts=0,
-            is_used=False
-        )
-        db.add(verification_record)
-        
-        # 8. Commit transaction
-        db.commit()
-        db.refresh(nuevo_usuario)
-        
-        # 9. Send verification email
-        logger.info(f"📧 Intentando enviar código de verificación a {request.email}")
-        logger.info(f"🔑 Código generado: {verification_code}")
-        try:
-            email_sent = email_service.send_verification_code(request.email, verification_code)
-            if email_sent:
-                logger.info(f"✅ Código enviado exitosamente a {request.email}")
-            else:
-                logger.warning(f"⚠️ No se pudo enviar email a {request.email} - revisar configuración SMTP")
-        except Exception as e:
-            logger.error(f"❌ Error al enviar email: {str(e)}")
-            # No fallar el registro si el email no se envía
-        
-        # 10. Return success response
-        return {
-            "status": "success",
-            "message": "¡Registro exitoso! Revisa tu correo para verificar tu cuenta. El código expira en 10 minutos."
-        }
-        
-    except HTTPException:
-        db.rollback()
-        raise
-    except ValueError as e:
-        db.rollback()
-        # Handle password validation errors from Pydantic
-        error_msg = str(e)
-        # Ensure we return the exact message from HU specifications
-        if "contraseña" in error_msg.lower() or "password" in error_msg.lower():
-            error_msg = "La contraseña debe tener al menos 10 caracteres, incluir una mayúscula, un número y un carácter especial."
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail={"status": "error", "message": error_msg}
-        )
+        created_user, success_message = auth_service.register_user(request)
+        return {"status": "success", "message": success_message}
     except Exception as e:
-        db.rollback()
-        logger.error(f"Error during registration: {str(e)}", exc_info=True)
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail={"status": "error", "message": "Error interno del servidor. Por favor, intenta más tarde."}
-        )
+        raise handle_auth_error(e)
 
 
 @router.post("/verify-email", response_model=StandardResponse, status_code=status.HTTP_200_OK)
-async def verify_email(request: VerificationCodeRequest, db: Session = Depends(get_db)):
+async def verify_email(
+    request: VerificationCodeRequest,
+    auth_service: AuthService = Depends(get_auth_service)
+):
     """
     Verify user email with 6-digit code
     
@@ -206,93 +125,17 @@ async def verify_email(request: VerificationCodeRequest, db: Session = Depends(g
     - Mark usuario as is_active=True after verification
     """
     try:
-        # 1. Validate required fields
-        if not request.email or not request.code:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail={"status": "error", "message": "Por favor, completa todos los campos obligatorios."}
-            )
-        
-        # 2. Find usuario by email (case-insensitive)
-        usuario = db.query(Usuario).filter(func.lower(Usuario.email) == func.lower(request.email)).first()
-        if not usuario:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail={"status": "error", "message": "Código inválido."}
-            )
-        
-        # 3. Check if user is already active
-        if usuario.is_active:
-            return {
-                "status": "success",
-                "message": "Cuenta verificada exitosamente. Ya puedes iniciar sesión."
-            }
-        
-        # 4. Find active verification code
-        verification_code = db.query(VerificationCode).filter(
-            and_(
-                VerificationCode.usuario_id == usuario.id,
-                VerificationCode.is_used == False,
-                VerificationCode.expires_at > datetime.now(timezone.utc)
-            )
-        ).order_by(VerificationCode.created_at.desc()).first()
-        
-        if not verification_code:
-            raise HTTPException(
-                status_code=status.HTTP_410_GONE,
-                detail={"status": "error", "message": "El código ha expirado. Solicita un reenvío."}
-            )
-        
-        # 5. Check verification attempts
-        if verification_code.attempts >= settings.MAX_VERIFICATION_ATTEMPTS:
-            raise HTTPException(
-                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-                detail={"status": "error", "message": "Has excedido el número máximo de intentos. Solicita un nuevo código."}
-            )
-        
-        # 6. Verify code hash (constant-time comparison)
-        is_valid = security_utils.verify_verification_code(request.code, verification_code.code_hash)
-        
-        if not is_valid:
-            # Increment attempts
-            verification_code.attempts += 1
-            db.commit()
-            
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail={"status": "error", "message": "Código inválido."}
-            )
-        
-        # 7. Code is valid - activate user
-        usuario.is_active = True
-        usuario.updated_at = datetime.now(timezone.utc)
-        
-        # Mark verification code as used
-        verification_code.is_used = True
-        
-        db.commit()
-        
-        logger.info(f"User {usuario.id} ({usuario.email}) verified successfully")
-        
-        return {
-            "status": "success",
-            "message": "Cuenta verificada exitosamente. Ya puedes iniciar sesión."
-        }
-        
-    except HTTPException:
-        db.rollback()
-        raise
+        verified_user, success_message = auth_service.verify_email(request.email, request.code)
+        return {"status": "success", "message": success_message}
     except Exception as e:
-        db.rollback()
-        logger.error(f"Error during email verification: {str(e)}", exc_info=True)
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail={"status": "error", "message": "Error interno del servidor. Por favor, intenta más tarde."}
-        )
+        raise handle_auth_error(e)
 
 
 @router.post("/resend-code", response_model=StandardResponse, status_code=status.HTTP_200_OK)
-async def resend_code(request: ResendCodeRequest, db: Session = Depends(get_db)):
+async def resend_code(
+    request: ResendCodeRequest,
+    auth_service: AuthService = Depends(get_auth_service)
+):
     """
     Resend verification code
     
@@ -301,234 +144,66 @@ async def resend_code(request: ResendCodeRequest, db: Session = Depends(get_db))
     - Respect rate-limit: max 3 reenvíos in 60 minutes
     """
     try:
-        # 1. Validate required fields
-        if not request.email:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail={"status": "error", "message": "Por favor, completa todos los campos obligatorios."}
-            )
-        
-        # 2. Find usuario by email (case-insensitive)
-        usuario = db.query(Usuario).filter(func.lower(Usuario.email) == func.lower(request.email)).first()
-        if not usuario:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail={"status": "error", "message": "Usuario no encontrado."}
-            )
-        
-        # 3. Check if user is already active
-        if usuario.is_active:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail={"status": "error", "message": "El usuario ya está verificado."}
-            )
-        
-        # 4. Check rate limiting - max 3 reenvíos in RESEND_CODE_WINDOW_MINUTES
-        window_start = datetime.now(timezone.utc) - timedelta(minutes=settings.RESEND_CODE_WINDOW_MINUTES)
-        
-        recent_codes = db.query(VerificationCode).filter(
-            and_(
-                VerificationCode.usuario_id == usuario.id,
-                VerificationCode.created_at >= window_start
-            )
-        ).all()
-        
-        total_sent = sum(code.sent_count for code in recent_codes)
-        
-        if total_sent >= settings.MAX_RESEND_CODE_ATTEMPTS:
-            raise HTTPException(
-                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-                detail={"status": "error", "message": "Has alcanzado el número máximo de reenvíos. Intenta más tarde."}
-            )
-        
-        # 5. Generate new verification code
-        verification_code = security_utils.generate_verification_code()
-        code_hash = security_utils.hash_verification_code(verification_code)
-        
-        # Log verification code in development mode for testing
-        # Always log for now to help with debugging - use ERROR level to ensure it shows
-        import sys
-        msg = f"========================================\n[DEV MODE] Resent verification code for {request.email}: {verification_code}\n[DEV MODE] User can verify email at: POST /api/auth/verify-email with code: {verification_code}\n========================================"
-        print(msg, flush=True)
-        sys.stdout.flush()
-        sys.stderr.write(msg + "\n")
-        sys.stderr.flush()
-        logger.error(f"[DEV MODE] Resent verification code for {request.email}: {verification_code}")
-        logger.error(f"[DEV MODE] User can verify email at: POST /api/auth/verify-email with code: {verification_code}")
-        logger.info(f"[DEV MODE] Resent verification code for {request.email}: {verification_code}")
-        logger.info(f"[DEV MODE] User can verify email at: POST /api/auth/verify-email with code: {verification_code}")
-        
-        expires_at = datetime.now(timezone.utc) + timedelta(minutes=settings.VERIFICATION_CODE_EXPIRE_MINUTES)
-        
-        # 6. Find existing unused code or create new one
-        existing_code = db.query(VerificationCode).filter(
-            and_(
-                VerificationCode.usuario_id == usuario.id,
-                VerificationCode.is_used == False,
-                VerificationCode.expires_at > datetime.now(timezone.utc)
-            )
-        ).first()
-        
-        if existing_code:
-            # Update existing code
-            existing_code.code_hash = code_hash
-            existing_code.expires_at = expires_at
-            existing_code.sent_count += 1
-            existing_code.attempts = 0
-            verification_record = existing_code
-        else:
-            # Create new verification code
-            verification_record = VerificationCode(
-                usuario_id=usuario.id,
-                code_hash=code_hash,
-                expires_at=expires_at,
-                sent_count=1,
-                attempts=0,
-                is_used=False
-            )
-            db.add(verification_record)
-        
-        db.commit()
-        db.refresh(verification_record)
-        
-        # 7. Send verification email
-        logger.info(f"📧 Reenviando código de verificación a {usuario.email}")
-        logger.info(f"🔑 Nuevo código generado: {verification_code}")
-        try:
-            email_sent = email_service.send_verification_code(usuario.email, verification_code)
-            if email_sent:
-                logger.info(f"✅ Código reenviado exitosamente a {usuario.email}")
-            else:
-                logger.warning(f"⚠️ No se pudo reenviar email a {usuario.email}")
-        except Exception as e:
-            logger.error(f"❌ Error al reenviar email: {str(e)}")
-            # No fallar el reenvío si el email no se envía
-        
-        return {
-            "status": "success",
-            "message": "Código reenviado. Revisa tu correo."
-        }
-        
-    except HTTPException:
-        db.rollback()
-        raise
+        success_message = auth_service.resend_verification_code(request.email)
+        return {"status": "success", "message": success_message}
     except Exception as e:
-        db.rollback()
-        logger.error(f"Error during resend code: {str(e)}", exc_info=True)
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail={"status": "error", "message": "Error interno del servidor. Por favor, intenta más tarde."}
-        )
+        raise handle_auth_error(e)
 
 
 @router.post("/login", response_model=LoginSuccessResponse, status_code=status.HTTP_200_OK)
-async def login(request: LoginRequest, response: Response, db: Session = Depends(get_db)):
+async def login(
+    request: LoginRequest,
+    response: Response,
+    auth_service: AuthService = Depends(get_auth_service)
+):
     """
     User login with credentials, handling account lockout and token generation.
     """
     try:
-        # 1. Validate required fields
-        if not request.email or not request.password:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail={"status": "error", "message": "Por favor, completa todos los campos obligatorios."}
-            )
-
-        # 2. Find user by email (case-insensitive)
-        usuario = db.query(Usuario).filter(func.lower(Usuario.email) == func.lower(request.email)).first()
-
-        # Generic error for user not found or password incorrect to prevent user enumeration
-        generic_error = HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail={"status": "error", "message": "Correo o contraseña incorrectos"}
+        # Call auth service for login logic
+        access_token, refresh_token, usuario = auth_service.login(
+            email=request.email,
+            password=request.password,
+            session_id=request.session_id
         )
-
-        if not usuario:
-            raise generic_error
-
-        # 3. Check if account is locked
-        if usuario.locked_until and usuario.locked_until > datetime.now(timezone.utc):
-            raise HTTPException(
-                status_code=status.HTTP_423_LOCKED,
-                detail={"status": "error", "message": "Cuenta bloqueada temporalmente por múltiples intentos fallidos. Intenta más tarde."}
-            )
-
-        # 4. Verify password
-        if not security_utils.verify_password(request.password, usuario.password_hash):
-            # Increment failed attempts and potentially lock account
-            usuario.failed_login_attempts = (usuario.failed_login_attempts or 0) + 1
-            if usuario.failed_login_attempts >= settings.MAX_LOGIN_ATTEMPTS:
-                usuario.locked_until = datetime.now(timezone.utc) + timedelta(minutes=settings.LOGIN_LOCKOUT_DURATION_MINUTES)
-            db.commit()
-            raise generic_error
-
-        # 5. Check if account is active - Usuario debe verificar su email
-        if not usuario.is_active:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail={"status": "error", "message": "Cuenta no verificada. Revisa tu correo para obtener el código de verificación."}
-            )
-
-        # 6. On successful login, reset failed attempts and update last login time
-        usuario.failed_login_attempts = 0
-        usuario.locked_until = None
-        usuario.ultimo_login = datetime.now(timezone.utc)
         
-        # 7. Create tokens
-        rol = "admin" if usuario.es_admin else "cliente"
-        access_token = security_utils.create_access_token(data={"sub": str(usuario.id), "rol": rol})
-        refresh_token, refresh_token_hash, refresh_token_expires = security_utils.create_refresh_token()
-        
-        # 8. Store refresh token in DB
-        new_refresh_token = RefreshToken(
-            usuario_id=usuario.id,
-            token_hash=refresh_token_hash,
-            expires_at=refresh_token_expires,
-            # ip=request.client.host, # This needs ForwardedHeaderMiddleware
-            # user_agent=request.headers.get("user-agent")
+        # Set refresh token in secure HttpOnly cookie
+        from datetime import datetime, timedelta, timezone
+        refresh_token_expires = datetime.now(timezone.utc) + timedelta(
+            minutes=settings.REFRESH_TOKEN_EXPIRE_MINUTES
         )
-        db.add(new_refresh_token)
-        db.commit()
         
-        # 9. Set refresh token in secure HttpOnly cookie
         response.set_cookie(
             key="refresh_token",
             value=refresh_token,
             httponly=True,
-            secure=not settings.DEBUG,  # True in production
-            samesite="lax", # or "strict"
+            secure=not settings.DEBUG,
+            samesite="lax",
             expires=refresh_token_expires,
-            path="/api/auth" # Path where refresh endpoint lives
+            path="/api/auth"
         )
         
-        # 10. Handle cart merging (placeholder)
+        # Handle cart merging (placeholder)
         cart_merge_info = CartMergeInfo(merged=False, items_adjusted=[])
         if request.session_id:
-            # TODO: Implement cart merging logic here
             logger.info(f"Cart merge requested for session_id: {request.session_id}")
-            # For now, we just acknowledge it
-            cart_merge_info.merged = True # Simulate merge
-            
+            cart_merge_info.merged = True  # Simulate merge
+        
         return LoginSuccessResponse(
             status="success",
             message="Inicio de sesión exitoso",
             access_token=access_token,
             cart_merge=cart_merge_info
         )
-
-    except HTTPException:
-        db.rollback()
-        raise
     except Exception as e:
-        db.rollback()
-        logger.error(f"Error during login: {str(e)}", exc_info=True)
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail={"status": "error", "message": "Error interno del servidor."}
-        )
+        raise handle_auth_error(e)
+
 
 @router.post("/refresh", response_model=TokenResponse)
-async def refresh_token(request: Request, db: Session = Depends(get_db)):
+async def refresh_token(
+    request: Request,
+    auth_service: AuthService = Depends(get_auth_service)
+):
     """
     Refresh access token using refresh token from HttpOnly cookie.
     """
@@ -538,105 +213,49 @@ async def refresh_token(request: Request, db: Session = Depends(get_db)):
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Refresh token not found"
         )
-
+    
     try:
-        token_hash = hashlib.sha256(refresh_token_value.encode('utf-8')).hexdigest()
-        
-        # Find the refresh token in the database
-        db_token = db.query(RefreshToken).filter(RefreshToken.token_hash == token_hash).first()
-
-        if not db_token:
-            raise HTTPException(status_code=401, detail="Invalid refresh token")
-        
-        if db_token.revoked:
-            raise HTTPException(status_code=401, detail="Refresh token has been revoked")
-
-        if db_token.expires_at < datetime.now(timezone.utc):
-            raise HTTPException(status_code=401, detail="Refresh token has expired")
-
-        # Create a new access token
-        access_token = security_utils.create_access_token(data={"sub": str(db_token.usuario_id)})
+        access_token = auth_service.refresh_access_token(refresh_token_value)
         
         return TokenResponse(
             access_token=access_token,
             expires_in=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60
         )
-        
-    except HTTPException as e:
-        raise e
     except Exception as e:
-        logger.error(f"Error refreshing token: {e}")
-        raise HTTPException(status_code=500, detail="Could not refresh token")
+        raise handle_auth_error(e)
 
 
 @router.post("/logout", status_code=status.HTTP_200_OK)
-async def logout(response: Response, request: Request, db: Session = Depends(get_db)):
+async def logout(
+    response: Response,
+    request: Request,
+    auth_service: AuthService = Depends(get_auth_service)
+):
     """
     User logout by revoking the refresh token.
     """
     refresh_token_value = request.cookies.get("refresh_token")
-    if refresh_token_value:
-        try:
-            token_hash = hashlib.sha256(refresh_token_value.encode('utf-8')).hexdigest()
-            db_token = db.query(RefreshToken).filter(RefreshToken.token_hash == token_hash).first()
-            if db_token:
-                db_token.revoked = True
-                db.commit()
-        except Exception as e:
-            logger.error(f"Error revoking token during logout: {e}")
-            # Do not prevent logout if DB operation fails
+    
+    # Revoke refresh token via service (accepts optional refresh token)
+    auth_service.logout(usuario_id=None, refresh_token=refresh_token_value)
     
     # Clear the cookie on the client side
     response.delete_cookie(key="refresh_token", path="/api/auth")
     
     return {"status": "success", "message": "Cierre de sesión exitoso"}
 
-def get_current_user(request: Request, db: Session = Depends(get_db)) -> UsuarioPublicResponse:
-    """Extrae el usuario autenticado del JWT Bearer token"""
-    auth_header = request.headers.get("authorization")
-    if not auth_header or not auth_header.lower().startswith("bearer "):
-        raise HTTPException(status_code=401, detail="No autenticado")
-    token = auth_header.split(" ", 1)[1]
-    payload = security_utils.verify_jwt_token(token)
-    user_id = payload.get("sub")
-    if not user_id:
-        raise HTTPException(status_code=401, detail="Token inválido")
-    usuario = db.query(Usuario).filter(Usuario.id == int(user_id)).first()
-    if not usuario:
-        raise HTTPException(status_code=403, detail="Usuario no encontrado")
-    # DESARROLLO: Desactivada validación de is_active para permitir login sin verificación de email
-    # if not usuario.is_active:
-    #     raise HTTPException(status_code=403, detail="Cuenta no activa")
-    rol = "admin" if usuario.es_admin else "cliente"
-    return UsuarioPublicResponse(
-        id=usuario.id,
-        nombre_completo=usuario.nombre_completo,
-        email=usuario.email,
-        rol=rol
-    )
-
-
-def require_admin(current_user: UsuarioPublicResponse = Depends(get_current_user)) -> UsuarioPublicResponse:
-    """Dependency to require that the current user is an admin.
-
-    Use in endpoints as:
-        @router.get(...)
-        def admin_only_endpoint(current_user: UsuarioPublicResponse = Depends(require_admin)):
-            # current_user is guaranteed to be admin
-            ...
-    Or as a dependency in the router declaration: `dependencies=[Depends(require_admin)]`.
-    """
-    if current_user.rol != "admin":
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail={"status": "error", "message": "Privilegios insuficientes."})
-    return current_user
 
 @router.get("/me", response_model=UsuarioPublicResponse)
 async def get_me(current_user: UsuarioPublicResponse = Depends(get_current_user)):
+    """Get current authenticated user profile"""
     return current_user
 
 
 @router.post("/forgot-password", response_model=StandardResponse, status_code=status.HTTP_200_OK)
-async def forgot_password(request: ForgotPasswordRequest, db: Session = Depends(get_db)):
+async def forgot_password(
+    request: ForgotPasswordRequest,
+    auth_service: AuthService = Depends(get_auth_service)
+):
     """
     Password recovery endpoint (US-ERROR-02 CP-21 to CP-22)
     
@@ -647,59 +266,17 @@ async def forgot_password(request: ForgotPasswordRequest, db: Session = Depends(
     - Non-blocking: Always returns 200 OK with success message
     """
     try:
-        # 1. Validate required fields
-        if not request.email:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail={"status": "error", "message": "Por favor, completa todos los campos obligatorios."}
-            )
+        # Request password reset - service handles all logic
+        auth_service.request_password_reset(request.email)
         
-        # 2. Find usuario by email (case-insensitive)
-        usuario = db.query(Usuario).filter(func.lower(Usuario.email) == func.lower(request.email)).first()
-        
-        # 3. Publish recovery email ONLY if user exists (async, non-blocking)
-        if usuario:
-            try:
-                # Generate password reset token (30 min expiry)
-                reset_token = security_utils.create_password_reset_token({"user_id": usuario.id, "email": usuario.email})
-                
-                # Build reset link
-                frontend_url = settings.FRONTEND_URL or "http://localhost:3000"
-                reset_link = f"{frontend_url}/reset-password?token={reset_token}"
-                
-                # Publish email message to RabbitMQ
-                message = {
-                    "requestId": str(uuid.uuid4()),
-                    "to": usuario.email,
-                    "reset_link": reset_link,
-                    "action": "send_password_reset",
-                    "timestamp": datetime.now(timezone.utc).isoformat()
-                }
-                
-                # Attempt to publish but don't fail the request if it fails
-                try:
-                    rabbitmq_producer.publish("email.password_reset", message)
-                    logger.info(f"Password reset email queued for {usuario.email}")
-                except Exception as e:
-                    logger.error(f"⚠️  Error publishing password reset email to RabbitMQ: {str(e)}")
-                    logger.warning(f"Email will not be sent. Ensure RabbitMQ is running at {settings.RABBITMQ_HOST}:{settings.RABBITMQ_PORT}")
-                    # Don't fail - the endpoint should still return success for security (prevents user enumeration)
-            except Exception as e:
-                logger.error(f"Error generating reset token: {str(e)}", exc_info=True)
-                # Still return success to prevent email enumeration
-        
-        # 4. Return uniform message (CP-21 and CP-22)
-        # This prevents attackers from enumerating valid emails
+        # Always return success message for security (prevent email enumeration)
         return {
             "status": "success",
             "message": "Se ha enviado a tu correo el enlace de recuperación"
         }
-    
-    except HTTPException:
-        raise
     except Exception as e:
+        # Log error but still return success for security
         logger.error(f"Error during password recovery: {str(e)}", exc_info=True)
-        # Return success anyway to prevent email enumeration attacks
         return {
             "status": "success",
             "message": "Se ha enviado a tu correo el enlace de recuperación"
@@ -707,7 +284,10 @@ async def forgot_password(request: ForgotPasswordRequest, db: Session = Depends(
 
 
 @router.post("/reset-password", response_model=StandardResponse, status_code=status.HTTP_200_OK)
-async def reset_password(request: ResetPasswordRequest, db: Session = Depends(get_db)):
+async def reset_password(
+    request: ResetPasswordRequest,
+    auth_service: AuthService = Depends(get_auth_service)
+):
     """
     Password reset endpoint (US-ERROR-02 CP-24 to CP-27)
     
@@ -717,133 +297,67 @@ async def reset_password(request: ResetPasswordRequest, db: Session = Depends(ge
     - Updates password and invalidates all existing tokens
     """
     try:
-        # 1. Verify and decode password reset token
-        try:
-            payload = security_utils.verify_password_reset_token(request.token)
-        except Exception as e:
-            logger.warning(f"Invalid password reset token: {str(e)}")
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail={"status": "error", "message": "Enlace de recuperación caducado o inválido. Solicita uno nuevo."}
-            )
-        
-        user_id = payload.get("user_id")
-        if not user_id:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail={"status": "error", "message": "Token inválido."}
-            )
-        
-        # 2. Find usuario
-        usuario = db.query(Usuario).filter(Usuario.id == user_id).first()
-        if not usuario:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail={"status": "error", "message": "Usuario no encontrado."}
-            )
-        
-        # 3. Hash new password
-        new_password_hash = security_utils.hash_password(request.new_password)
-        
-        # 4. Update password
-        usuario.password_hash = new_password_hash
-        usuario.updated_at = datetime.now(timezone.utc)
-        
-        # 5. Invalidate all refresh tokens for this user (force logout everywhere)
-        db.query(RefreshToken).filter(RefreshToken.usuario_id == user_id).update({"revoked": True})
-        
-        db.commit()
-        db.refresh(usuario)
-        
-        logger.info(f"Password reset successfully for user {usuario.id} ({usuario.email})")
+        # Delegate to service
+        usuario = auth_service.reset_password(request.token, request.new_password)
         
         return {
             "status": "success",
             "message": "Contraseña actualizada exitosamente. Ya puedes iniciar sesión con tu nueva contraseña."
         }
-    
-    except HTTPException:
-        db.rollback()
-        raise
-    except ValueError as e:
-        db.rollback()
-        error_msg = str(e)
-        if "contraseña" in error_msg.lower() or "password" in error_msg.lower():
-            error_msg = "La contraseña debe tener al menos 10 caracteres, incluir una mayúscula, un número y un carácter especial."
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail={"status": "error", "message": error_msg}
-        )
     except Exception as e:
-        db.rollback()
-        logger.error(f"Error during password reset: {str(e)}", exc_info=True)
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail={"status": "error", "message": "Error interno del servidor. Por favor, intenta más tarde."}
-        )
+        raise handle_auth_error(e)
 
 
+# ==================== AUTH MIDDLEWARE & DEPENDENCIES ====================
 
-@router.get("/dev/verification-code/{email}", status_code=status.HTTP_200_OK)
-async def get_verification_code_dev(email: str, db: Session = Depends(get_db)):
+def get_current_user(request: Request, db: Session = Depends(get_db)) -> UsuarioPublicResponse:
     """
-    DEVELOPMENT ONLY: Get the latest verification code for an email
-    This endpoint is only available when DEBUG=True
-    WARNING: This should NEVER be enabled in production!
+    Extract authenticated user from JWT Bearer token
+    Used as dependency for protected endpoints
     """
-    if not settings.DEBUG:
+    auth_header = request.headers.get("authorization")
+    if not auth_header or not auth_header.lower().startswith("bearer "):
+        raise HTTPException(status_code=401, detail="No autenticado")
+    
+    token = auth_header.split(" ", 1)[1]
+    payload = security_utils.verify_jwt_token(token)
+    user_id = payload.get("sub")
+    
+    if not user_id:
+        raise HTTPException(status_code=401, detail="Token inválido")
+    
+    from app.infrastructure.repositories.user_repository import SQLAlchemyUserRepository
+    user_repo = SQLAlchemyUserRepository(db)
+    usuario = user_repo.find_by_id(int(user_id))
+    
+    if not usuario:
+        raise HTTPException(status_code=403, detail="Usuario no encontrado")
+    
+    rol = "admin" if usuario.es_admin else "cliente"
+    return UsuarioPublicResponse(
+        id=usuario.id,
+        nombre_completo=usuario.nombre_completo,
+        email=usuario.email,
+        rol=rol
+    )
+
+
+def require_admin(current_user: UsuarioPublicResponse = Depends(get_current_user)) -> UsuarioPublicResponse:
+    """
+    Dependency to require admin privileges
+    
+    Usage:
+        @router.get("/admin-only")
+        def admin_endpoint(current_user: UsuarioPublicResponse = Depends(require_admin)):
+            # Only admins can access
+            pass
+    """
+    if current_user.rol != "admin":
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail={"status": "error", "message": "This endpoint is only available in development mode."}
+            detail={"status": "error", "message": "Privilegios insuficientes."}
         )
-    
-    try:
-        # Find usuario by email (case-insensitive)
-        usuario = db.query(Usuario).filter(func.lower(Usuario.email) == func.lower(email)).first()
-        if not usuario:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail={"status": "error", "message": "Usuario no encontrado."}
-            )
-        
-        # Find the most recent verification code (even if expired, for dev purposes)
-        verification_code_record = db.query(VerificationCode).filter(
-            VerificationCode.usuario_id == usuario.id
-        ).order_by(VerificationCode.created_at.desc()).first()
-        
-        if not verification_code_record:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail={"status": "error", "message": "No se encontró código de verificación para este usuario."}
-            )
-        
-        # Check if code is still valid
-        is_expired = verification_code_record.expires_at < datetime.now(timezone.utc)
-        is_used = verification_code_record.is_used
-        
-        # Note: We cannot retrieve the actual code from the hash (it's one-way)
-        # But we can provide information about the code status
-        return {
-            "status": "success",
-            "message": "⚠️ IMPORTANTE: El código está hasheado en la BD y no se puede recuperar.",
-            "info": {
-                "email": email,
-                "usuario_id": usuario.id,
-                "code_id": verification_code_record.id,
-                "expires_at": verification_code_record.expires_at.isoformat(),
-                "is_expired": is_expired,
-                "is_used": is_used,
-                "attempts": verification_code_record.attempts,
-                "sent_count": verification_code_record.sent_count,
-                "created_at": verification_code_record.created_at.isoformat() if verification_code_record.created_at else None
-            },
-            "note": "Revisa los logs del servidor cuando se generó el código. En modo DEBUG, el código se imprime en los logs."
-        }
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Error getting verification code for dev: {str(e)}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail={"status": "error", "message": "Error interno del servidor."}
-        )
+    return current_user
+
+
+# ==================== USER PROFILE ====================
